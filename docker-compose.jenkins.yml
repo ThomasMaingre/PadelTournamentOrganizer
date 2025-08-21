@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins
+    container_name: jenkins
+    user: root
+    privileged: true
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      # Données Jenkins persos (plugins, jobs, config…)
+      - jenkins_home:/var/jenkins_home
+      # Accès au Docker de l’hôte pour builder/pusher depuis les pipelines
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  jenkins_home:
