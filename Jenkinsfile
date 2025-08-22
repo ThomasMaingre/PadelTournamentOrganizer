@@ -1,13 +1,23 @@
 pipeline {
   agent any
 
-  // Doit correspondre au nom défini dans Manage Jenkins > Tools
-  tools { nodejs 'Node20' }
+  tools {
+    nodejs 'Node20'   // le nom exact que tu as configuré dans "Gérer Jenkins" > "Outils"
+  }
 
-  // Une variable d'env safe (évite le bloc environment vide)
-  environment { NEXT_TELEMETRY_DISABLED = '1' }
+  environment {
+    // Récupère les secrets depuis les Credentials Jenkins
+    NEXT_PUBLIC_SUPABASE_URL      = credentials('supabase-url')
+    NEXT_PUBLIC_SUPABASE_ANON_KEY = credentials('supabase-anon')
 
-  options { timestamps() } // Ajoute l’horodatage dans la console
+    // Optionnel : évite l’invite interactive de Next lint si tu gardes le stage Lint
+    CI = 'true'
+  }
+
+  options {
+    timestamps()
+    ansiColor('xterm')
+  }
 
   stages {
     stage('Hello') {
@@ -17,25 +27,37 @@ pipeline {
     }
 
     stage('Checkout') {
-      steps { checkout scm }
+      steps {
+        checkout scm
+      }
     }
 
     stage('Install') {
-      steps { sh 'npm ci' }
+      steps {
+        sh 'npm ci'
+      }
     }
 
+    // Optionnel : si ton repo n’a pas encore de config ESLint,
+    // ce stage peut afficher une invite. Tu peux le commenter pour l’instant.
     stage('Lint') {
-      steps { sh 'npm run -s lint || true' }
+      steps {
+        sh 'npm run -s lint || true'
+      }
     }
 
     stage('Build') {
-      steps { sh 'npm run -s build' }
+      steps {
+        // Next.js lira les variables ci-dessus depuis process.env
+        sh 'npm run -s build'
+      }
     }
 
     stage('Archive build (optionnel)') {
-      when { expression { fileExists('.next') } }
+      when { expression { fileExists('out') || fileExists('.next') } }
       steps {
-        archiveArtifacts artifacts: '.next/**', allowEmptyArchive: true, fingerprint: true
+        sh 'tar -czf build-artifacts.tgz .next || true'
+        archiveArtifacts artifacts: 'build-artifacts.tgz', fingerprint: true, onlyIfSuccessful: true
       }
     }
   }
@@ -43,5 +65,6 @@ pipeline {
   post {
     success { echo '✅ Build OK' }
     failure { echo '🚨 Build failed' }
+    always  { echo '🧹 Fin du pipeline' }
   }
 }
