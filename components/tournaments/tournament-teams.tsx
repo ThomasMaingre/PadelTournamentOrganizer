@@ -1,101 +1,161 @@
+// "use client"
+
+// import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+// import { Badge } from "@/components/ui/badge"
+// import { Users } from "lucide-react"
+
+// type SimplePlayer = {
+//   id: string
+//   first_name: string
+//   last_name: string
+// }
+
+// type Team = {
+//   id: string
+//   name: string | null
+//   pair_weight: number | null
+//   seed_position: number | null
+//   // ⚠️ peut être absent selon la requête Supabase
+//   players?: SimplePlayer[]
+// }
+
+// export default function TournamentTeams({
+//   teams = [],
+//   tournamentId,
+// }: {
+//   teams?: Team[]
+//   tournamentId: string
+// }) {
+//   const safeTeams: Team[] = Array.isArray(teams) ? teams : []
+
+//   if (safeTeams.length === 0) {
+//     return (
+//       <Card>
+//         <CardHeader>
+//           <CardTitle className="flex items-center gap-2">
+//             <Users className="h-5 w-5" />
+//             Équipes inscrites
+//           </CardTitle>
+//         </CardHeader>
+//         <CardContent className="text-sm text-muted-foreground">
+//           Aucune équipe pour le moment.
+//         </CardContent>
+//       </Card>
+//     )
+//   }
+
+//   return (
+//     <div className="grid gap-4">
+//       {safeTeams.map((team) => {
+//         const players = Array.isArray(team.players) ? team.players : []
+//         const autoName =
+//           players.length === 2 ? `${players[0].last_name}/${players[1].last_name}` : null
+
+//         return (
+//           <Card key={team.id} className="hover:shadow-sm transition-shadow">
+//             <CardHeader className="flex-row items-center justify-between gap-3">
+//               <div className="space-y-1">
+//                 <CardTitle className="text-base">
+//                   {team.name || autoName || "Équipe sans nom"}
+//                 </CardTitle>
+//                 <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+//                   <Badge variant="outline">
+//                     Tête de série&nbsp;{team.seed_position ?? "—"}
+//                   </Badge>
+//                   <Badge variant="secondary">
+//                     Poids de paire&nbsp;{team.pair_weight ?? "—"}
+//                   </Badge>
+//                 </div>
+//               </div>
+//             </CardHeader>
+
+//             <CardContent>
+//               {players.length > 0 ? (
+//                 <ul className="grid gap-2 md:grid-cols-2">
+//                   {players.map((p) => (
+//                     <li key={p.id} className="rounded-md border p-3 text-sm">
+//                       <span className="font-medium">
+//                         {p.first_name} {p.last_name}
+//                       </span>
+//                     </li>
+//                   ))}
+//                 </ul>
+//               ) : (
+//                 <p className="text-sm text-muted-foreground">
+//                   Aucun joueur lié à cette équipe pour le moment.
+//                 </p>
+//               )}
+//             </CardContent>
+//           </Card>
+//         )
+//       })}
+//     </div>
+//   )
+// }
+
+
 "use client"
 
-import { Card, CardContent } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Trash2, Crown, Users } from "lucide-react"
-import { deleteTeam } from "@/lib/tournament-actions"
 
-interface Player {
-  id: string
-  first_name: string
-  last_name: string
-  national_ranking: number | null
-}
-
-interface Team {
+type Player = { id: string; first_name: string; last_name: string }
+type Team = {
   id: string
   name: string | null
-  seed_position: number | null
   pair_weight: number | null
-  players: Player[]
+  seed_position: number | null
+  players?: Player[]
 }
 
-interface TournamentTeamsProps {
+export default function TournamentTeams({
+  teams,
+}: {
   teams: Team[]
   tournamentId: string
-}
-
-export default function TournamentTeams({ teams, tournamentId }: TournamentTeamsProps) {
-  const handleDeleteTeam = async (teamId: string) => {
-    if (confirm("Êtes-vous sûr de vouloir supprimer cette équipe ?")) {
-      await deleteTeam(teamId)
-    }
-  }
-
-  if (teams.length === 0) {
+}) {
+  if (!teams || teams.length === 0) {
     return (
-      <Card>
-        <CardContent className="text-center py-12">
-          <div className="text-muted-foreground mb-4">
-            <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-            <h3 className="text-lg font-semibold mb-2">Aucune équipe inscrite</h3>
-            <p>Commencez par ajouter des équipes à votre tournoi</p>
-          </div>
-        </CardContent>
+      <Card className="p-6 text-sm text-muted-foreground">
+        Aucune équipe inscrite pour le moment.
       </Card>
     )
   }
 
   return (
-    <div className="space-y-4">
-      {teams.map((team, index) => (
-        <Card key={team.id} className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary font-semibold">
-                  {team.seed_position || index + 1}
-                </div>
-                <div>
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    {team.name || `Équipe ${index + 1}`}
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    {team.players.map((player, playerIndex) => (
-                      <div key={player.id} className="flex items-center gap-1">
-                        <Badge variant="outline" className="text-xs">
-                          {player.first_name} {player.last_name}
-                          {player.national_ranking && ` (${player.national_ranking})`}
-                        </Badge>
-                        {playerIndex === 0 && team.players.length > 1 && (
-                          <span className="text-muted-foreground">/</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    {team.pair_weight && <Badge variant="secondary">Poids: {team.pair_weight.toFixed(1)}</Badge>}
-                    {team.seed_position && (
-                      <Badge variant="default">
-                        <Crown className="h-3 w-3 mr-1" />
-                        Tête de série #{team.seed_position}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDeleteTeam(team.id)}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+    <div className="space-y-3">
+      {teams.map((team) => (
+        <Card key={team.id} className="p-3 md:p-4">
+          {/* En-tête compact */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="truncate font-medium text-sm md:text-base">
+              {team.name || "Équipe sans nom"}
             </div>
-          </CardContent>
+
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="h-6 px-2 text-[10px] md:text-xs">
+                Tête de série {team.seed_position ?? "—"}
+              </Badge>
+              <Badge variant="secondary" className="h-6 px-2 text-[10px] md:text-xs">
+                Poids de paire {team.pair_weight ?? "—"}
+              </Badge>
+            </div>
+          </div>
+
+          {/* Joueurs – boxes compactes */}
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {(team.players ?? []).slice(0, 2).map((p) => (
+              <div
+                key={p.id}
+                className="rounded-md border bg-background px-3 py-2 text-sm"
+                title={`${p.first_name} ${p.last_name}`}
+              >
+                <span className="truncate block">
+                  {p.first_name} {p.last_name}
+                </span>
+              </div>
+            ))}
+          </div>
         </Card>
       ))}
     </div>

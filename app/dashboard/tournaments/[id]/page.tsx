@@ -1,59 +1,76 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, ArrowLeft, Users, Plus, Settings, Play, Target, Calendar, CheckCircle } from "lucide-react"
 import Link from "next/link"
-import TournamentPlayers from "@/components/tournaments/tournament-players"
+import { Trophy, ArrowLeft, Users, Plus, Settings, Play, Target, Calendar, CheckCircle } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+import TournamentTeams from "@/components/tournaments/tournament-teams"
 import TournamentGroups from "@/components/tournaments/tournament-groups"
 import TournamentMatches from "@/components/tournaments/tournament-matches"
 import GroupStandings from "@/components/tournaments/group-standings"
 import FinalRankings from "@/components/tournaments/final-rankings"
-import AddPlayerForm from "@/components/tournaments/add-player-form"
-import { calculateSeeding, organizeGroups, generateFinalPhase, startTournament } from "@/lib/tournament-actions"
+import AddTeamForm from "@/components/tournaments/add-team-form"
+
+import {
+  calculateTeamSeeding,
+  organizeGroups,
+  generateFinalPhase,
+  startTournament,
+} from "@/lib/tournament-actions"
 import { completeTournament } from "@/lib/ranking-actions"
+import { createSupabaseServerClient } from "@/lib/supabase/server"
 
-interface TournamentPageProps {
-  params: {
-    id: string
-  }
-}
+export default async function TournamentPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
 
-export default async function TournamentPage({ params }: TournamentPageProps) {
-  // Auth sécurisée (Next 15: client serveur async + getUser)
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
     error: userErr,
   } = await supabase.auth.getUser()
-  if (userErr) console.error("getUser([id]):", userErr.message)
-  if (!user) {
-    redirect("/auth/login")
-  }
+  if (userErr) console.error("getUser (tournament page):", userErr.message)
+  if (!user) redirect("/auth/login")
 
-  // Détails du tournoi (protégé par judge_id)
-  const { data: tournament, error: tError } = await supabase
+  // Tournoi
+  const { data: tournament, error: tErr } = await supabase
     .from("tournaments")
     .select("*")
-    .eq("id", params.id)
-    .eq("judge_id", user!.id)
-    .maybeSingle()
-
-  if (tError) console.error("tournament load error:", tError.message)
-  if (!tournament) {
+    .eq("id", id)
+    .eq("judge_id", user.id)
+    .single()
+  if (tErr || !tournament) {
+    if (tErr) console.error("load tournament error:", tErr.message)
     notFound()
   }
 
-  // Joueurs du tournoi
-  const { data: players } = await supabase
-    .from("players")
-    .select("*")
-    .eq("tournament_id", params.id)
+  // Équipes (séparé des joueurs pour éviter l'erreur de relation manquante)
+  const { data: teamsRaw, error: teamsErr } = await supabase
+    .from("teams")
+    .select("id, name, pair_weight, seed_position")
+    .eq("tournament_id", id)
     .order("seed_position", { ascending: true, nullsLast: true })
+  if (teamsErr) console.error("Load teams error:", teamsErr.message)
 
-  // Poules du tournoi
-  const { data: groups } = await supabase
+  const { data: playersByTeam, error: playersErr } = await supabase
+    .from("players")
+    .select("id, first_name, last_name, team_id")
+    .eq("tournament_id", id)
+  if (playersErr) console.error("Load players for teams error:", playersErr.message)
+
+  const teams =
+    (teamsRaw ?? []).map((t) => ({
+      ...t,
+      players: (playersByTeam ?? []).filter((p) => p.team_id === t.id),
+    })) ?? []
+
+  // Poules (toujours basées joueurs pour le moment)
+  const { data: groups, error: groupsErr } = await supabase
     .from("groups")
     .select(`
       id,
@@ -67,11 +84,12 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
         )
       )
     `)
-    .eq("tournament_id", params.id)
+    .eq("tournament_id", id)
     .order("name")
+  if (groupsErr) console.error("Load groups error:", groupsErr.message)
 
-  // Matchs du tournoi
-  const { data: matches } = await supabase
+  // Matchs (encore basés joueurs)
+  const { data: matches, error: matchesErr } = await supabase
     .from("matches")
     .select(`
       id,
@@ -92,14 +110,13 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
         first_name,
         last_name
       ),
-      groups (
-        name
-      )
+      groups ( name )
     `)
-    .eq("tournament_id", params.id)
+    .eq("tournament_id", id)
     .order("match_type")
+  if (matchesErr) console.error("Load matches error:", matchesErr.message)
 
-  // Classement final (si terminé)
+  // Classement final
   const { data: finalRankings } = await supabase
     .from("tournament_rankings")
     .select(`
@@ -107,38 +124,19 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
       points_earned,
       matches_won,
       matches_lost,
-      players (
-        id,
-        first_name,
-        last_name
-      )
+      players ( id, first_name, last_name )
     `)
-    .eq("tournament_id", params.id)
+    .eq("tournament_id", id)
     .order("final_position")
 
-  // Server Actions (inchangées)
-  const handleCalculateSeeding = async () => {
-    "use server"
-    await calculateSeeding(params.id)
-  }
-  const handleOrganizeGroups = async () => {
-    "use server"
-    await organizeGroups(params.id)
-  }
-  const handleGenerateFinalPhase = async () => {
-    "use server"
-    await generateFinalPhase(params.id)
-  }
-  const handleStartTournament = async () => {
-    "use server"
-    await startTournament(params.id)
-  }
-  const handleCompleteTournament = async () => {
-    "use server"
-    await completeTournament(params.id)
-  }
+  // Server Actions (liaison d'id pour éviter d'accéder à params dans les closures)
+  const calculateSeedingAction = calculateTeamSeeding.bind(null, id)
+  const organizeGroupsAction = organizeGroups.bind(null, id)
+  const generateFinalPhaseAction = generateFinalPhase.bind(null, id)
+  const startTournamentAction = startTournament.bind(null, id)
+  const completeTournamentAction = completeTournament.bind(null, id)
 
-  const finalMatch = matches?.find((m: any) => m.match_type === "final")
+  const finalMatch = matches?.find((m) => m.match_type === "final")
   const canCompleteTournament = finalMatch?.status === "completed" && tournament.status === "in_progress"
 
   return (
@@ -159,7 +157,7 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
                 <div>
                   <h1 className="text-xl font-bold">{tournament.name}</h1>
                   <p className="text-sm text-muted-foreground">
-                    {players?.length || 0} joueurs inscrits • Max: {tournament.max_players}
+                    {teams.length} équipes inscrites • Max: {Math.floor((tournament.max_players ?? 0) / 2)}
                   </p>
                 </div>
               </div>
@@ -170,13 +168,12 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
                 Paramètres
               </Button>
               <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  tournament.status === "completed"
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tournament.status === "completed"
                     ? "bg-green-100 text-green-800"
                     : tournament.status === "in_progress"
                       ? "bg-blue-100 text-blue-800"
                       : "bg-gray-100 text-gray-800"
-                }`}
+                  }`}
               >
                 {tournament.status === "completed"
                   ? "Terminé"
@@ -191,34 +188,38 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-4 gap-8">
-          {/* Main Tournament Content */}
+        <div className="grid lg:grid-cols-6 gap-8">
+          {/* Main */}
           <div className="lg:col-span-3">
-            <Tabs defaultValue={tournament.status === "completed" ? "rankings" : "players"} className="w-full">
+            <Tabs defaultValue={tournament.status === "completed" ? "rankings" : "teams"} className="w-full">
               <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="players">Joueurs</TabsTrigger>
+                <TabsTrigger value="teams">Équipes</TabsTrigger>
                 <TabsTrigger value="groups">Poules</TabsTrigger>
                 <TabsTrigger value="matches">Matchs</TabsTrigger>
                 <TabsTrigger value="standings">Classements</TabsTrigger>
                 <TabsTrigger value="rankings">Podium</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="players" className="mt-6">
+              {/* ÉQUIPES */}
+              <TabsContent value="teams" className="mt-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold flex items-center gap-2">
                     <Users className="h-6 w-6" />
-                    Joueurs inscrits
+                    Équipes inscrites
                   </h2>
                   {tournament.status === "draft" && (
-                    <Button size="sm">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Ajouter un joueur
+                    <Button size="sm" asChild>
+                      <Link href="#add-team">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Ajouter une équipe
+                      </Link>
                     </Button>
                   )}
                 </div>
-                <TournamentPlayers players={players || []} tournamentId={params.id} />
+                <TournamentTeams teams={teams} tournamentId={id} />
               </TabsContent>
 
+              {/* POULES */}
               <TabsContent value="groups" className="mt-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -229,6 +230,7 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
                 <TournamentGroups groups={groups || []} />
               </TabsContent>
 
+              {/* MATCHS */}
               <TabsContent value="matches" className="mt-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -236,9 +238,10 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
                     Matchs du tournoi
                   </h2>
                 </div>
-                <TournamentMatches matches={matches || []} tournamentId={params.id} />
+                <TournamentMatches matches={matches || []} tournamentId={id} />
               </TabsContent>
 
+              {/* CLASSEMENTS POULES */}
               <TabsContent value="standings" className="mt-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -248,8 +251,8 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
                 </div>
                 {groups && groups.length > 0 ? (
                   <div className="grid md:grid-cols-2 gap-6">
-                    {groups.map((group: any) => (
-                      <GroupStandings key={group.id} group={group} tournamentId={params.id} />
+                    {groups.map((group) => (
+                      <GroupStandings key={group.id} group={group} tournamentId={id} />
                     ))}
                   </div>
                 ) : (
@@ -265,6 +268,7 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
                 )}
               </TabsContent>
 
+              {/* PODIUM */}
               <TabsContent value="rankings" className="mt-6">
                 <FinalRankings rankings={finalRankings || []} tournamentName={tournament.name} />
               </TabsContent>
@@ -272,21 +276,21 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Add Player Form - only show if tournament is draft */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Ajout équipe */}
             {tournament.status === "draft" && (
-              <Card>
+              <Card id="add-team">
                 <CardHeader>
-                  <CardTitle className="text-lg">Ajouter un joueur</CardTitle>
-                  <CardDescription>Inscrivez un nouveau joueur au tournoi</CardDescription>
+                  <CardTitle className="text-lg">Ajouter une équipe</CardTitle>
+                  <CardDescription>Inscrivez une nouvelle équipe au tournoi</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <AddPlayerForm tournamentId={params.id} />
+                  <AddTeamForm tournamentId={id} />
                 </CardContent>
               </Card>
             )}
 
-            {/* Tournament Actions */}
+            {/* Actions tournoi */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Actions du tournoi</CardTitle>
@@ -294,44 +298,29 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
               <CardContent className="space-y-3">
                 {tournament.status === "draft" && (
                   <>
-                    <form action={handleCalculateSeeding}>
-                      <Button
-                        type="submit"
-                        className="w-full bg-transparent"
-                        variant="outline"
-                        disabled={!players || players.length < 4}
-                      >
+                    <form action={calculateSeedingAction}>
+                      <Button className="w-full bg-transparent" variant="outline" disabled={!teams || teams.length < 2}>
                         <Target className="h-4 w-4 mr-2" />
                         Calculer les têtes de série
                       </Button>
                     </form>
 
-                    <form action={handleOrganizeGroups}>
-                      <Button
-                        type="submit"
-                        className="w-full bg-transparent"
-                        variant="outline"
-                        disabled={!players || players.length < 4}
-                      >
+                    <form action={organizeGroupsAction}>
+                      <Button className="w-full bg-transparent" variant="outline" disabled={!teams || teams.length < 4}>
                         <Users className="h-4 w-4 mr-2" />
                         Organiser les poules
                       </Button>
                     </form>
 
-                    <form action={handleGenerateFinalPhase}>
-                      <Button
-                        type="submit"
-                        className="w-full bg-transparent"
-                        variant="outline"
-                        disabled={!groups || groups.length === 0}
-                      >
+                    <form action={generateFinalPhaseAction}>
+                      <Button className="w-full bg-transparent" variant="outline" disabled={!groups || groups.length === 0}>
                         <Trophy className="h-4 w-4 mr-2" />
                         Générer phases finales
                       </Button>
                     </form>
 
-                    <form action={handleStartTournament}>
-                      <Button type="submit" className="w-full" disabled={!matches || matches.length === 0}>
+                    <form action={startTournamentAction}>
+                      <Button className="w-full" disabled={!matches || matches.length === 0}>
                         <Play className="h-4 w-4 mr-2" />
                         Démarrer le tournoi
                       </Button>
@@ -340,8 +329,8 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
                 )}
 
                 {tournament.status === "in_progress" && canCompleteTournament && (
-                  <form action={handleCompleteTournament}>
-                    <Button type="submit" className="w-full">
+                  <form action={completeTournamentAction}>
+                    <Button className="w-full">
                       <CheckCircle className="h-4 w-4 mr-2" />
                       Clôturer le tournoi
                     </Button>
@@ -355,8 +344,10 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
                   </div>
                 )}
 
-                {players && players.length < 4 && tournament.status === "draft" && (
-                  <p className="text-xs text-muted-foreground text-center">Minimum 4 joueurs requis pour démarrer</p>
+                {teams && teams.length < 2 && tournament.status === "draft" && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Minimum 2 équipes requis pour démarrer
+                  </p>
                 )}
               </CardContent>
             </Card>
