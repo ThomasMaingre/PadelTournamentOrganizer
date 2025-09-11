@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,11 +7,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Users } from "lucide-react"
-import { addTeam } from "@/lib/tournament-actions"
+import { useFormStatus } from "react-dom"
+import { addTeamAction } from "@/app/dashboard/tournaments/[id]/actions"
 
 interface AddTeamFormProps {
   tournamentId: string
-  onTeamAdded?: () => void
+  onTeamAdded?: () => void // gardé pour compat, non utilisé avec Server Actions
 }
 
 interface Player {
@@ -22,76 +21,43 @@ interface Player {
   nationalRanking: number | null
 }
 
-export default function AddTeamForm({ tournamentId, onTeamAdded }: AddTeamFormProps) {
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending} className="w-full">
+      {pending ? "Ajout en cours..." : "Ajouter l'équipe"}
+    </Button>
+  )
+}
+
+export default function AddTeamForm({ tournamentId }: AddTeamFormProps) {
   const [players, setPlayers] = useState<Player[]>([
     { firstName: "", lastName: "", nationalRanking: null },
     { firstName: "", lastName: "", nationalRanking: null },
   ])
   const [teamName, setTeamName] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const updatePlayer = (index: number, field: keyof Player, value: string | number | null) => {
-    const newPlayers = [...players]
-    newPlayers[index] = { ...newPlayers[index], [field]: value }
-    setPlayers(newPlayers)
-  }
-
-  const calculatePairWeight = () => {
-    const rankings = players.map((p) => p.nationalRanking).filter((r): r is number => r !== null && r > 0)
-
-    if (rankings.length !== 2) return null
-
-    // Calculate pair weight: average of the two rankings
-    // Lower number = better ranking, so lower pair weight = better team
-    return (rankings[0] + rankings[1]) / 2
+    const next = [...players]
+    next[index] = { ...next[index], [field]: value }
+    setPlayers(next)
   }
 
   const generateTeamName = () => {
-    const validPlayers = players.filter((p) => p.firstName && p.lastName)
-    if (validPlayers.length === 2) {
-      return `${validPlayers[0].lastName}/${validPlayers[1].lastName}`
-    }
-    return ""
+    const valid = players.filter((p) => p.firstName && p.lastName)
+    return valid.length === 2 ? `${valid[0].lastName}/${valid[1].lastName}` : ""
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    const validPlayers = players.filter((p) => p.firstName && p.lastName)
-    if (validPlayers.length !== 2) {
-      alert("Veuillez renseigner les deux joueurs de l'équipe")
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      const finalTeamName = teamName || generateTeamName()
-      const pairWeight = calculatePairWeight()
-
-      await addTeam(tournamentId, {
-        name: finalTeamName,
-        players: validPlayers,
-        pairWeight,
-      })
-
-      // Reset form
-      setPlayers([
-        { firstName: "", lastName: "", nationalRanking: null },
-        { firstName: "", lastName: "", nationalRanking: null },
-      ])
-      setTeamName("")
-
-      onTeamAdded?.()
-    } catch (error) {
-      console.error("Erreur lors de l'ajout de l'équipe:", error)
-      alert("Erreur lors de l'ajout de l'équipe")
-    } finally {
-      setIsSubmitting(false)
-    }
+  const calculatePairWeight = () => {
+    const ranks = players.map((p) => p.nationalRanking).filter((r): r is number => r !== null && r > 0)
+    if (ranks.length !== 2) return null
+    return (ranks[0] + ranks[1]) / 2
   }
 
   const pairWeight = calculatePairWeight()
+
+  // On pré-remplit l’argument tournamentId de la Server Action
+  const action = addTeamAction.bind(null, tournamentId)
 
   return (
     <Card>
@@ -103,19 +69,21 @@ export default function AddTeamForm({ tournamentId, onTeamAdded }: AddTeamFormPr
         <p className="text-sm text-muted-foreground">Inscrivez une équipe de 2 joueurs au tournoi</p>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Team Name */}
+        {/* IMPORTANT : on passe directement la Server Action au form */}
+        <form action={action} className="space-y-6">
+          {/* Nom d'équipe */}
           <div className="space-y-2">
             <Label htmlFor="teamName">Nom de l'équipe (optionnel)</Label>
             <Input
               id="teamName"
+              name="teamName"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
               placeholder={generateTeamName() || "ex: Dupont/Martin"}
             />
           </div>
 
-          {/* Players */}
+          {/* Joueurs */}
           <div className="space-y-4">
             <Label className="text-base font-semibold">Joueurs de l'équipe</Label>
             {players.map((player, index) => (
@@ -128,6 +96,7 @@ export default function AddTeamForm({ tournamentId, onTeamAdded }: AddTeamFormPr
                     <Label htmlFor={`firstName-${index}`}>Prénom</Label>
                     <Input
                       id={`firstName-${index}`}
+                      name={index === 0 ? "player1FirstName" : "player2FirstName"}
                       value={player.firstName}
                       onChange={(e) => updatePlayer(index, "firstName", e.target.value)}
                       placeholder="Prénom"
@@ -138,6 +107,7 @@ export default function AddTeamForm({ tournamentId, onTeamAdded }: AddTeamFormPr
                     <Label htmlFor={`lastName-${index}`}>Nom</Label>
                     <Input
                       id={`lastName-${index}`}
+                      name={index === 0 ? "player1LastName" : "player2LastName"}
                       value={player.lastName}
                       onChange={(e) => updatePlayer(index, "lastName", e.target.value)}
                       placeholder="Nom"
@@ -150,9 +120,13 @@ export default function AddTeamForm({ tournamentId, onTeamAdded }: AddTeamFormPr
                       id={`ranking-${index}`}
                       type="number"
                       min="1"
-                      value={player.nationalRanking || ""}
+                      value={player.nationalRanking ?? ""}
                       onChange={(e) =>
-                        updatePlayer(index, "nationalRanking", e.target.value ? Number.parseInt(e.target.value) : null)
+                        updatePlayer(
+                          index,
+                          "nationalRanking",
+                          e.target.value ? Number.parseInt(e.target.value, 10) : null,
+                        )
                       }
                       placeholder="ex: 1, 50, 150..."
                     />
@@ -162,8 +136,14 @@ export default function AddTeamForm({ tournamentId, onTeamAdded }: AddTeamFormPr
             ))}
           </div>
 
-          {/* Pair Weight Display */}
-          {pairWeight && (
+          {/* Pair weight calculé côté client et envoyé en hidden */}
+          <input
+            type="hidden"
+            name="pairWeight"
+            value={pairWeight !== null && pairWeight !== undefined ? String(pairWeight) : ""}
+          />
+
+          {pairWeight !== null && pairWeight !== undefined && (
             <div className="p-3 bg-muted rounded-lg">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Poids de paire calculé:</span>
@@ -175,9 +155,7 @@ export default function AddTeamForm({ tournamentId, onTeamAdded }: AddTeamFormPr
             </div>
           )}
 
-          <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? "Ajout en cours..." : "Ajouter l'équipe"}
-          </Button>
+          <SubmitButton />
         </form>
       </CardContent>
     </Card>
