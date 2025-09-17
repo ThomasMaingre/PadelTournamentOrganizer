@@ -1,22 +1,19 @@
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
-import { Trophy, ArrowLeft, Users, Plus, Settings, Play, Target, Calendar, CheckCircle } from "lucide-react"
+import { Trophy, ArrowLeft, Users, Plus, Settings, Play, Target } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import TournamentTeams from "@/components/tournaments/tournament-teams"
-import TournamentGroups from "@/components/tournaments/tournament-groups"
 import TournamentMatches from "@/components/tournaments/tournament-matches"
-import GroupStandings from "@/components/tournaments/group-standings"
 import FinalRankings from "@/components/tournaments/final-rankings"
 import AddTeamForm from "@/components/tournaments/add-team-form"
 
 import {
   calculateTeamSeeding,
-  organizeGroups,
-  generateFinalPhase,
+  generateKnockoutBracket,
   startTournament,
 } from "@/lib/tournament-actions"
 import { completeTournament } from "@/lib/ranking-actions"
@@ -49,7 +46,7 @@ export default async function TournamentPage({
     notFound()
   }
 
-  // Équipes (séparé des joueurs pour éviter l'erreur de relation manquante)
+  // Équipes (avec joueurs)
   const { data: teamsRaw, error: teamsErr } = await supabase
     .from("teams")
     .select("id, name, pair_weight, seed_position")
@@ -57,11 +54,10 @@ export default async function TournamentPage({
     .order("seed_position", { ascending: true, nullsLast: true })
   if (teamsErr) console.error("Load teams error:", teamsErr.message)
 
-  const { data: playersByTeam, error: playersErr } = await supabase
+  const { data: playersByTeam } = await supabase
     .from("players")
     .select("id, first_name, last_name, team_id")
     .eq("tournament_id", id)
-  if (playersErr) console.error("Load players for teams error:", playersErr.message)
 
   const teams =
     (teamsRaw ?? []).map((t) => ({
@@ -69,51 +65,47 @@ export default async function TournamentPage({
       players: (playersByTeam ?? []).filter((p) => p.team_id === t.id),
     })) ?? []
 
-  // Poules (toujours basées joueurs pour le moment)
-  const { data: groups, error: groupsErr } = await supabase
-    .from("groups")
-    .select(`
-      id,
-      name,
-      group_players (
-        players (
-          id,
-          first_name,
-          last_name,
-          seed_position
-        )
-      )
-    `)
-    .eq("tournament_id", id)
-    .order("name")
-  if (groupsErr) console.error("Load groups error:", groupsErr.message)
-
-  // Matchs (encore basés joueurs)
+  // Matchs (relations équipes)
+  // const { data: matches, error: matchesErr } = await supabase
+  //   .from("matches")
+  //   .select(`
+  //     id,
+  //     match_type,
+  //     round_number,
+  //     status,
+  //     player1_score,
+  //     player2_score,
+  //     scheduled_time,
+  //     created_at,
+  //     team1_id,
+  //     team2_id,
+  //     winner_team_id,
+  //     team1:teams!matches_team1_id_fkey ( id, name, seed_position ),
+  //     team2:teams!matches_team2_id_fkey ( id, name, seed_position )
+  //   `)
+  //   .eq("tournament_id", id)
+  //   .order("created_at", { ascending: true })
   const { data: matches, error: matchesErr } = await supabase
-    .from("matches")
-    .select(`
-      id,
-      match_type,
-      round_number,
-      status,
-      player1_score,
-      player2_score,
-      scheduled_time,
-      player1_id,
-      player2_id,
-      winner_id,
-      players_player1_idToplayers:players!matches_player1_id_fkey (
-        first_name,
-        last_name
-      ),
-      players_player2_idToplayers:players!matches_player2_id_fkey (
-        first_name,
-        last_name
-      ),
-      groups ( name )
-    `)
-    .eq("tournament_id", id)
-    .order("match_type")
+  .from("matches")
+  .select(`
+    id,
+    match_type,
+    round_number,
+    status,
+    player1_score,
+    player2_score,
+    scheduled_time,
+    team1_id,
+    team2_id,
+    winner_team_id,
+    tournament_id,
+    created_at,
+    team1:teams!matches_team1_id_fkey ( id, name, seed_position ),
+    team2:teams!matches_team2_id_fkey ( id, name, seed_position )
+  `)
+  .eq("tournament_id", id)
+  .order("created_at", { ascending: true })
+
   if (matchesErr) console.error("Load matches error:", matchesErr.message)
 
   // Classement final
@@ -129,10 +121,9 @@ export default async function TournamentPage({
     .eq("tournament_id", id)
     .order("final_position")
 
-  // Server Actions (liaison d'id pour éviter d'accéder à params dans les closures)
+  // Server actions
   const calculateSeedingAction = calculateTeamSeeding.bind(null, id)
-  const organizeGroupsAction = organizeGroups.bind(null, id)
-  const generateFinalPhaseAction = generateFinalPhase.bind(null, id)
+  const generateBracketAction = generateKnockoutBracket.bind(null, id)
   const startTournamentAction = startTournament.bind(null, id)
   const completeTournamentAction = completeTournament.bind(null, id)
 
@@ -186,17 +177,15 @@ export default async function TournamentPage({
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main */}
       <main className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-6 gap-8">
-          {/* Main */}
-          <div className="lg:col-span-3">
+          {/* zone principale élargie */}
+          <div className="lg:col-span-4">
             <Tabs defaultValue={tournament.status === "completed" ? "rankings" : "teams"} className="w-full">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="teams">Équipes</TabsTrigger>
-                <TabsTrigger value="groups">Poules</TabsTrigger>
-                <TabsTrigger value="matches">Matchs</TabsTrigger>
-                <TabsTrigger value="standings">Classements</TabsTrigger>
+                <TabsTrigger value="bracket">Tableau</TabsTrigger>
                 <TabsTrigger value="rankings">Podium</TabsTrigger>
               </TabsList>
 
@@ -219,53 +208,12 @@ export default async function TournamentPage({
                 <TournamentTeams teams={teams} tournamentId={id} />
               </TabsContent>
 
-              {/* POULES */}
-              <TabsContent value="groups" className="mt-6">
+              {/* TABLEAU */}
+              <TabsContent value="bracket" className="mt-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold flex items-center gap-2">
-                    <Target className="h-6 w-6" />
-                    Organisation des poules
-                  </h2>
-                </div>
-                <TournamentGroups groups={groups || []} />
-              </TabsContent>
-
-              {/* MATCHS */}
-              <TabsContent value="matches" className="mt-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold flex items-center gap-2">
-                    <Calendar className="h-6 w-6" />
-                    Matchs du tournoi
-                  </h2>
+                  <h2 className="text-2xl font-bold">Tableau à élimination directe</h2>
                 </div>
                 <TournamentMatches matches={matches || []} tournamentId={id} />
-              </TabsContent>
-
-              {/* CLASSEMENTS POULES */}
-              <TabsContent value="standings" className="mt-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold flex items-center gap-2">
-                    <Trophy className="h-6 w-6" />
-                    Classements des poules
-                  </h2>
-                </div>
-                {groups && groups.length > 0 ? (
-                  <div className="grid md:grid-cols-2 gap-6">
-                    {groups.map((group) => (
-                      <GroupStandings key={group.id} group={group} tournamentId={id} />
-                    ))}
-                  </div>
-                ) : (
-                  <Card>
-                    <CardContent className="text-center py-12">
-                      <Trophy className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">Aucun classement disponible</h3>
-                      <p className="text-muted-foreground">
-                        Organisez les poules et jouez des matchs pour voir les classements
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
               </TabsContent>
 
               {/* PODIUM */}
@@ -276,7 +224,7 @@ export default async function TournamentPage({
           </div>
 
           {/* Sidebar */}
-          <div className="lg:col-span-3 space-y-6">
+          <div className="lg:col-span-2 space-y-6">
             {/* Ajout équipe */}
             {tournament.status === "draft" && (
               <Card id="add-team">
@@ -305,17 +253,10 @@ export default async function TournamentPage({
                       </Button>
                     </form>
 
-                    <form action={organizeGroupsAction}>
-                      <Button className="w-full bg-transparent" variant="outline" disabled={!teams || teams.length < 4}>
-                        <Users className="h-4 w-4 mr-2" />
-                        Organiser les poules
-                      </Button>
-                    </form>
-
-                    <form action={generateFinalPhaseAction}>
-                      <Button className="w-full bg-transparent" variant="outline" disabled={!groups || groups.length === 0}>
+                    <form action={generateBracketAction}>
+                      <Button className="w-full bg-transparent" variant="outline" disabled={!teams || teams.length < 2}>
                         <Trophy className="h-4 w-4 mr-2" />
-                        Générer phases finales
+                        Générer le tableau
                       </Button>
                     </form>
 
@@ -331,23 +272,9 @@ export default async function TournamentPage({
                 {tournament.status === "in_progress" && canCompleteTournament && (
                   <form action={completeTournamentAction}>
                     <Button className="w-full">
-                      <CheckCircle className="h-4 w-4 mr-2" />
                       Clôturer le tournoi
                     </Button>
                   </form>
-                )}
-
-                {tournament.status === "completed" && (
-                  <div className="text-center py-4">
-                    <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">Tournoi terminé</p>
-                  </div>
-                )}
-
-                {teams && teams.length < 2 && tournament.status === "draft" && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Minimum 2 équipes requis pour démarrer
-                  </p>
                 )}
               </CardContent>
             </Card>
