@@ -39,7 +39,7 @@ export default function AddTeamForm({ tournamentId, onTeamAdded }: AddTeamFormPr
       .map((p) => p.nationalRanking)
       .filter((r): r is number => r !== null && r > 0)
     if (rankings.length !== 2) return null
-    return (rankings[0] + rankings[1]) / 2
+    return rankings[0] + rankings[1]
   }
 
   // Nom auto basé sur les noms de famille : "Dupont/Martin"
