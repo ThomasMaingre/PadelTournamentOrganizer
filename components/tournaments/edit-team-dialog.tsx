@@ -38,7 +38,6 @@ export default function EditTeamDialog({
   const [isOpen, setIsOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
-    teamName: team.name || "",
     player1: {
       firstName: team.players?.[0]?.first_name || "",
       lastName: team.players?.[0]?.last_name || "",
@@ -51,6 +50,9 @@ export default function EditTeamDialog({
     },
   })
 
+  // Générer automatiquement le nom de l'équipe
+  const teamName = `${formData.player1.lastName}/${formData.player2.lastName}`
+
   // N'afficher le bouton que si le tournoi est en brouillon
   if (tournamentStatus !== "draft") {
     return null
@@ -58,11 +60,6 @@ export default function EditTeamDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!formData.teamName.trim()) {
-      toast.error("Le nom de l'équipe est requis")
-      return
-    }
 
     if (!formData.player1.firstName.trim() || !formData.player1.lastName.trim()) {
       toast.error("Le nom et prénom du joueur 1 sont requis")
@@ -77,7 +74,7 @@ export default function EditTeamDialog({
     setIsSubmitting(true)
     try {
       await updateTeam(tournamentId, team.id, {
-        teamName: formData.teamName.trim(),
+        teamName: teamName.trim(),
         player1: {
           firstName: formData.player1.firstName.trim(),
           lastName: formData.player1.lastName.trim(),
@@ -115,17 +112,15 @@ export default function EditTeamDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Nom de l'équipe */}
+          {/* Nom de l'équipe (auto-généré) */}
           <div className="space-y-2">
-            <Label htmlFor="teamName">Nom de l'équipe *</Label>
-            <Input
-              id="teamName"
-              value={formData.teamName}
-              onChange={(e) => setFormData({ ...formData, teamName: e.target.value })}
-              placeholder="ex: Dupont/Martin"
-              required
-              maxLength={50}
-            />
+            <Label>Nom de l'équipe</Label>
+            <div className="rounded-md border bg-muted px-3 py-2 text-sm">
+              {teamName || "Nom d'équipe généré automatiquement"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Le nom de l'équipe est généré automatiquement à partir des noms de famille des joueurs
+            </p>
           </div>
 
           {/* Joueur 1 */}

@@ -147,6 +147,19 @@ export default async function TournamentPage({
   // Vérifier si les équipes ont des positions de tête de série
   const teamsWithSeeds = teams.some(team => team.seed_position !== null && team.name !== 'TBD')
 
+  // Formater les dates
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return null
+    return new Date(dateStr).toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    })
+  }
+
+  const startDate = formatDate(tournament.start_date)
+  const endDate = formatDate(tournament.end_date)
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary">
       {/* Header */}
@@ -166,6 +179,11 @@ export default async function TournamentPage({
                   <h1 className="text-xl font-bold">{tournament.name}</h1>
                   <p className="text-sm text-muted-foreground">
                     {teams.filter(t => t.name !== 'TBD').length} équipes inscrites • Max: {Math.floor((tournament.max_players ?? 0) / 2)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {startDate ? `Du ${startDate}` : 'Date de début non définie'}
+                    {' • '}
+                    {endDate ? `au ${endDate}` : 'Date de fin non définie'}
                   </p>
                 </div>
               </div>
