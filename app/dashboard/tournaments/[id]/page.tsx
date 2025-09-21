@@ -26,6 +26,27 @@ import { completeTournament } from "@/lib/ranking-actions"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { createSlug } from "@/lib/utils/slug"
 
+function formatTournamentTitle(name: string, category: string, startDate: string | null) {
+  const categoryLabels = {
+    homme: 'Hommes',
+    femme: 'Femmes',
+    mixte: 'Mixte'
+  }
+
+  const categoryLabel = categoryLabels[category as keyof typeof categoryLabels] || 'Mixte'
+
+  if (startDate) {
+    const formattedDate = new Date(startDate).toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    })
+    return `${name} ${categoryLabel} ${formattedDate}`
+  }
+
+  return `${name} ${categoryLabel}`
+}
+
 export default async function TournamentPage({
   params,
 }: {
@@ -197,7 +218,9 @@ export default async function TournamentPage({
               <div className="flex items-center gap-3">
                 <Logo size={32} />
                 <div>
-                  <h1 className="text-xl font-bold">{tournament.name}</h1>
+                  <h1 className="text-xl font-bold">
+                    {formatTournamentTitle(tournament.name, tournament.category || 'mixte', tournament.start_date)}
+                  </h1>
                   <p className="text-sm text-muted-foreground">
                     {teams.filter(t => t.name !== 'TBD').length} équipes inscrites • Max: {Math.floor((tournament.max_players ?? 0) / 2)}
                   </p>

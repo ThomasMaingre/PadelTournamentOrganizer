@@ -6,6 +6,8 @@ import { createSlug } from "@/lib/utils/slug"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import UserDropdown from "@/components/user-dropdown"
+import CategoryFilter from "@/components/dashboard/category-filter"
+import ViewTabs from "@/components/dashboard/view-tabs"
 import {
   Trophy,
   Plus,
@@ -18,7 +20,7 @@ import {
 } from "lucide-react"
 import Logo from "@/components/ui/logo"
 
-type Search = { view?: "current" | "history" }
+type Search = { view?: "current" | "history"; category?: "tous" | "homme" | "femme" | "mixte" }
 
 const CURRENT_STATUSES = ["draft", "in_progress"] as const
 const HISTORY_STATUSES = ["completed"] as const
@@ -56,13 +58,34 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+function formatTournamentTitle(name: string, category: string, startDate: string | null) {
+  const categoryLabels = {
+    homme: 'Hommes',
+    femme: 'Femmes',
+    mixte: 'Mixte'
+  }
+
+  const categoryLabel = categoryLabels[category as keyof typeof categoryLabels] || 'Mixte'
+
+  if (startDate) {
+    const formattedDate = new Date(startDate).toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    })
+    return `${name} ${categoryLabel} ${formattedDate}`
+  }
+
+  return `${name} ${categoryLabel}`
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
   // Next 15 : searchParams peut être un Promise
   searchParams: Promise<Search>
 }) {
-  const { view = "current" } = await searchParams
+  const { view = "current", category = "tous" } = await searchParams
 
   // Session utilisateur
   const supabase = await createSupabaseServerClient()
@@ -108,18 +131,21 @@ export default async function DashboardPage({
 
   // Filtre + chargement des tournois listés
   const statuses = view === "history" ? [...HISTORY_STATUSES] : [...CURRENT_STATUSES]
-  const { data: tournaments, error: tErr } = await supabase
+  let tournamentsQuery = supabase
     .from("tournaments")
-    .select("id, name, created_at, status")
+    .select("id, name, created_at, status, category, start_date")
     .eq("judge_id", user.id)
     .in("status", statuses as unknown as string[])
     .order("created_at", { ascending: false })
 
-  if (tErr) console.error("load tournaments:", tErr.message)
+  // Appliquer le filtre de catégorie si nécessaire
+  if (category !== "tous") {
+    tournamentsQuery = tournamentsQuery.eq("category", category)
+  }
 
-  const tabCard = (active: boolean) =>
-    `group rounded-2xl border bg-card/90 backdrop-blur hover:bg-card transition-all hover:shadow-md ${active ? "ring-2 ring-primary" : "ring-0"
-    }`
+  const { data: tournaments, error: tErr } = await tournamentsQuery
+
+  if (tErr) console.error("load tournaments:", tErr.message)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary">
@@ -167,42 +193,26 @@ export default async function DashboardPage({
             </Card>
           </Link>
 
-          {/* Tournois en cours */}
-          <Link href="/dashboard?view=current" className="block">
-            <Card className={tabCard(view === "current")}>
-              <CardHeader className="text-center">
-                <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 text-primary grid place-items-center group-hover:scale-105 transition">
-                  <CalendarCheck className="h-6 w-6" />
-                </div>
-                <CardTitle className="mt-2">
-                  Tournois en cours {typeof currentCount === "number" ? `(${currentCount})` : ""}
-                </CardTitle>
-                <CardDescription>Brouillons &amp; En cours</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
+          <ViewTabs
+            currentView={view}
+            currentCategory={category}
+            currentCount={currentCount ?? undefined}
+            historyCount={historyCount ?? undefined}
+          />
+        </section>
 
-          {/* Historique */}
-          <Link href="/dashboard?view=history" className="block">
-            <Card className={tabCard(view === "history")}>
-              <CardHeader className="text-center">
-                <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 text-primary grid place-items-center group-hover:scale-105 transition">
-                  <HistoryIcon className="h-6 w-6" />
-                </div>
-                <CardTitle className="mt-2">
-                  Historique {typeof historyCount === "number" ? `(${historyCount})` : ""}
-                </CardTitle>
-                <CardDescription>Tournois terminés</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
+        {/* Filtres par catégorie */}
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">
+              {view === "history" ? "Tournois terminés" : "Mes tournois (brouillons & en cours)"}
+            </h2>
+            <CategoryFilter currentView={view} currentCategory={category} />
+          </div>
         </section>
 
         {/* Liste filtrée */}
         <section>
-          <h2 className="text-xl font-semibold mb-4">
-            {view === "history" ? "Tournois terminés" : "Mes tournois (brouillons & en cours)"}
-          </h2>
 
           <div className="space-y-3">
             {(tournaments ?? []).length === 0 && (
@@ -220,7 +230,9 @@ export default async function DashboardPage({
                     <Logo size={40} className="shrink-0 rounded-xl" />
 
                     <div className="min-w-0">
-                      <div className="font-semibold truncate">{t.name}</div>
+                      <div className="font-semibold truncate">
+                        {formatTournamentTitle(t.name, t.category || 'mixte', t.start_date)}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         Créé le {new Date(t.created_at).toLocaleDateString("fr-FR")}
                       </div>

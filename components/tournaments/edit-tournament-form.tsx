@@ -18,6 +18,7 @@ type Tournament = {
   status: string
   start_date: string | null
   end_date: string | null
+  category: string
 }
 
 interface EditTournamentFormProps {
@@ -33,6 +34,7 @@ export default function EditTournamentForm({ tournament }: EditTournamentFormPro
     max_players: tournament.max_players || 16,
     start_date: tournament.start_date || "",
     end_date: tournament.end_date || "",
+    category: tournament.category || "mixte",
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,6 +66,7 @@ export default function EditTournamentForm({ tournament }: EditTournamentFormPro
         max_players: formData.max_players,
         start_date: formData.start_date || null,
         end_date: formData.end_date || null,
+        category: formData.category,
       })
 
       toast.success("Tournoi modifié avec succès")
@@ -128,6 +131,28 @@ export default function EditTournamentForm({ tournament }: EditTournamentFormPro
         <p className="text-xs text-muted-foreground">
           Optionnel - Laissez vide si la date de fin n'est pas encore définie
         </p>
+      </div>
+
+      {/* Catégorie */}
+      <div className="space-y-2">
+        <Label htmlFor="category">Catégorie *</Label>
+        <select
+          id="category"
+          value={formData.category}
+          onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          required={isDraft}
+          disabled={!isDraft}
+        >
+          <option value="mixte">Mixte</option>
+          <option value="homme">Homme</option>
+          <option value="femme">Femme</option>
+        </select>
+        {!isDraft && (
+          <p className="text-xs text-muted-foreground">
+            La catégorie ne peut plus être modifiée une fois le tournoi démarré
+          </p>
+        )}
       </div>
 
       {/* Nombre maximum d'équipes */}

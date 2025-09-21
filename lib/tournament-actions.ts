@@ -62,6 +62,7 @@ export async function createTournament(formData: FormData) {
   const judgeId = String(formData.get("judgeId") ?? "").trim()
   const startDate = String(formData.get("startDate") ?? "").trim()
   const endDate = formData.get("endDate") ? String(formData.get("endDate")) : null
+  const category = String(formData.get("category") ?? "mixte").trim()
 
   const maxTeams = Number(formData.get("maxTeams") ?? 16)
   const max_players = maxTeams * 2
@@ -90,6 +91,7 @@ export async function createTournament(formData: FormData) {
       end_date: endDate,
       max_players,
       status: "draft",
+      category,
     })
     .select("id")
     .single()
@@ -1092,6 +1094,7 @@ export async function updateTournament(
     max_players: number
     start_date: string | null
     end_date: string | null
+    category: string
   }
 ) {
   const supabase = await createSupabaseServerClient()
@@ -1131,6 +1134,7 @@ export async function updateTournament(
 
     updateData.name = data.name
     updateData.max_players = data.max_players
+    updateData.category = data.category
   }
 
   // Mettre à jour le tournoi
