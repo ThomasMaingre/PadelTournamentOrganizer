@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Trophy, Users, Calendar, BarChart3 } from "lucide-react"
 import Link from "next/link"
+import Logo from "@/components/ui/logo"
 
 export default async function Home() {
   // On essaie d'initialiser Supabase côté serveur.
@@ -35,7 +36,7 @@ export default async function Home() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <Trophy className="h-12 w-12 text-primary mx-auto mb-4" />
+            <Logo size={48} className="mx-auto mb-4" />
             <CardTitle className="text-2xl">Padel Tournament Organizer</CardTitle>
             <CardDescription>Connectez Supabase pour commencer à organiser vos tournois</CardDescription>
           </CardHeader>
@@ -56,7 +57,7 @@ export default async function Home() {
         {/* Hero Section */}
         <div className="text-center mb-16">
           <div className="flex justify-center mb-6">
-            <Trophy className="h-16 w-16 text-primary" />
+            <Logo size={64} />
           </div>
           <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
             Padel Tournament
@@ -90,7 +91,7 @@ export default async function Home() {
 
           <Card className="text-center">
             <CardHeader>
-              <Trophy className="h-12 w-12 text-primary mx-auto mb-4" />
+              <Logo size={48} className="mx-auto mb-4" />
               <CardTitle>Têtes de série</CardTitle>
             </CardHeader>
             <CardContent>

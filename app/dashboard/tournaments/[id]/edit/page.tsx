@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Trophy } from "lucide-react"
+import Logo from "@/components/ui/logo"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -61,7 +62,7 @@ export default async function EditTournamentPage({
                 </Link>
               </Button>
               <div className="flex items-center gap-3">
-                <Trophy className="h-8 w-8 text-primary" />
+                <Logo size={32} />
                 <div>
                   <h1 className="text-xl font-bold">Modifier le tournoi</h1>
                   <p className="text-sm text-muted-foreground">

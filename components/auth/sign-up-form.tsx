@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { Loader2, Trophy } from "lucide-react"
 import Link from "next/link"
+import Logo from "@/components/ui/logo"
 import { signUp } from "@/lib/actions"
 
 function SubmitButton() {
@@ -33,7 +34,7 @@ export default function SignUpForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
-        <Trophy className="h-12 w-12 text-primary mx-auto mb-4" />
+        <Logo size={48} className="mx-auto mb-4" />
         <CardTitle className="text-2xl">Inscription Juge-Arbitre</CardTitle>
         <CardDescription>Créez votre compte pour commencer à organiser des tournois</CardDescription>
       </CardHeader>

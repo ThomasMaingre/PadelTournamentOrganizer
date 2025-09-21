@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { Trophy, ArrowLeft, Users, Plus, Settings, Edit, Lock } from "lucide-react"
+import Logo from "@/components/ui/logo"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -183,7 +184,7 @@ export default async function TournamentPage({
                 </Link>
               </Button>
               <div className="flex items-center gap-3">
-                <Trophy className="h-8 w-8 text-primary" />
+                <Logo size={32} />
                 <div>
                   <h1 className="text-xl font-bold">{tournament.name}</h1>
                   <p className="text-sm text-muted-foreground">
@@ -219,7 +220,7 @@ export default async function TournamentPage({
               )}
               <span
                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tournament.status === "completed"
-                    ? "bg-green-100 text-green-800"
+                    ? "bg-blue-100 text-blue-800"
                     : tournament.status === "in_progress"
                       ? "bg-blue-100 text-blue-800"
                       : "bg-gray-100 text-gray-800"

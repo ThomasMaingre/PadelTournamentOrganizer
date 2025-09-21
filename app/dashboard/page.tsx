@@ -15,6 +15,7 @@ import {
   PlayCircle,
   Clock,
 } from "lucide-react"
+import Logo from "@/components/ui/logo"
 
 type Search = { view?: "current" | "history" }
 
@@ -25,7 +26,7 @@ function StatusBadge({ status }: { status: string }) {
   const map = {
     completed: {
       label: "Terminé",
-      cls: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+      cls: "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
       Icon: CheckCircle2,
     },
     in_progress: {
@@ -116,7 +117,7 @@ export default async function DashboardPage({
   if (tErr) console.error("load tournaments:", tErr.message)
 
   const tabCard = (active: boolean) =>
-    `group rounded-2xl border bg-card/90 backdrop-blur hover:bg-card transition-all hover:shadow-md ${active ? "ring-2 ring-emerald-600" : "ring-0"
+    `group rounded-2xl border bg-card/90 backdrop-blur hover:bg-card transition-all hover:shadow-md ${active ? "ring-2 ring-primary" : "ring-0"
     }`
 
   return (
@@ -126,9 +127,7 @@ export default async function DashboardPage({
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-emerald-600/10 text-emerald-700 grid place-items-center">
-                <Trophy className="h-6 w-6" />
-              </div>
+              <Logo size={40} className="rounded-xl" />
               <Link
                 href={`/dashboard/`}
                 className="block -m-2 p-2 rounded-md hover:bg-muted/40 cursor-pointer"
@@ -156,9 +155,9 @@ export default async function DashboardPage({
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           {/* Nouveau tournoi */}
           <Link href="/dashboard/tournaments/new" className="block">
-            <Card className="group cursor-pointer overflow-hidden rounded-2xl border bg-gradient-to-br from-emerald-50 to-emerald-100/30 hover:from-emerald-100 hover:to-white transition">
+            <Card className="group cursor-pointer overflow-hidden rounded-2xl border bg-gradient-to-br from-blue-50 to-blue-100/30 hover:from-blue-100 hover:to-white transition">
               <CardHeader className="text-center">
-                <div className="mx-auto h-12 w-12 rounded-xl bg-emerald-600/10 text-emerald-700 grid place-items-center group-hover:scale-105 transition">
+                <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 text-primary grid place-items-center group-hover:scale-105 transition">
                   <Plus className="h-6 w-6" />
                 </div>
                 <CardTitle className="mt-2">Nouveau tournoi</CardTitle>
@@ -171,7 +170,7 @@ export default async function DashboardPage({
           <Link href="/dashboard?view=current" className="block">
             <Card className={tabCard(view === "current")}>
               <CardHeader className="text-center">
-                <div className="mx-auto h-12 w-12 rounded-xl bg-emerald-600/10 text-emerald-700 grid place-items-center group-hover:scale-105 transition">
+                <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 text-primary grid place-items-center group-hover:scale-105 transition">
                   <CalendarCheck className="h-6 w-6" />
                 </div>
                 <CardTitle className="mt-2">
@@ -186,7 +185,7 @@ export default async function DashboardPage({
           <Link href="/dashboard?view=history" className="block">
             <Card className={tabCard(view === "history")}>
               <CardHeader className="text-center">
-                <div className="mx-auto h-12 w-12 rounded-xl bg-emerald-600/10 text-emerald-700 grid place-items-center group-hover:scale-105 transition">
+                <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 text-primary grid place-items-center group-hover:scale-105 transition">
                   <HistoryIcon className="h-6 w-6" />
                 </div>
                 <CardTitle className="mt-2">
@@ -217,9 +216,7 @@ export default async function DashboardPage({
               <Link key={t.id} href={`/dashboard/tournaments/${t.id}`} className="block">
                 <div className="group rounded-2xl border bg-card hover:bg-white/60 transition shadow-sm hover:shadow-md">
                   <div className="px-4 py-4 flex items-center gap-4">
-                    <div className="h-10 w-10 shrink-0 rounded-xl bg-emerald-600/10 text-emerald-700 grid place-items-center">
-                      <Trophy className="h-5 w-5" />
-                    </div>
+                    <Logo size={40} className="shrink-0 rounded-xl" />
 
                     <div className="min-w-0">
                       <div className="font-semibold truncate">{t.name}</div>

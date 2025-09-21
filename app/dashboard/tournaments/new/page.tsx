@@ -5,6 +5,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Trophy, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import Logo from "@/components/ui/logo"
 
 export default async function NewTournamentPage() {
   // Auth SSR (Next 15)
@@ -34,7 +35,7 @@ export default async function NewTournamentPage() {
               </Link>
             </Button>
             <div className="flex items-center gap-3">
-              <Trophy className="h-8 w-8 text-primary" />
+              <Logo size={32} />
               <div>
                 <h1 className="text-xl font-bold">Nouveau tournoi</h1>
                 <p className="text-sm text-muted-foreground">Créez et configurez votre tournoi de padel</p>

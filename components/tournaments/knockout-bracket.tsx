@@ -271,7 +271,7 @@ export default function KnockoutBracket({ matches, tournamentId, tournamentStatu
 
 function Row({ team, score, isWinner, forceTBD, isBye, showTBDForQuarters, hideScore }: { team?: Team | null; score: number | null; isWinner?: boolean; forceTBD?: boolean; isBye?: boolean; showTBDForQuarters?: boolean; hideScore?: boolean }) {
   return (
-    <div className={`flex items-center justify-between ${isWinner ? 'font-semibold text-green-700 bg-green-50 px-2 py-1 rounded' : ''}`}>
+    <div className={`flex items-center justify-between ${isWinner ? 'font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded' : ''}`}>
       <div className="truncate flex items-center gap-2">
         {forceTBD ? (
           <span className="text-muted-foreground">À définir</span>
@@ -285,7 +285,7 @@ function Row({ team, score, isWinner, forceTBD, isBye, showTBDForQuarters, hideS
           team?.name ?? <span className="text-muted-foreground">À définir</span>
         )}
         {!forceTBD && !isBye && !showTBDForQuarters && team?.name !== 'TBD' && team?.seed_position ? <span className="ml-2 text-xs text-muted-foreground">#{team.seed_position}</span> : null}
-        {isWinner && !isBye && !showTBDForQuarters && team?.name !== 'TBD' && <span className="text-green-600 text-xs font-bold">VAINQUEUR</span>}
+        {isWinner && !isBye && !showTBDForQuarters && team?.name !== 'TBD' && <span className="text-blue-600 text-xs font-bold">VAINQUEUR</span>}
       </div>
       <div className="text-sm font-medium">{hideScore ? '' : (isBye ? 0 : (team?.name === 'TBD' ? '' : (score ?? 0)))}</div>
     </div>
