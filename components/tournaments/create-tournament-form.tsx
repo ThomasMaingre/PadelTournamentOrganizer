@@ -6,7 +6,6 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type Props = { judgeId: string }
 
@@ -15,7 +14,6 @@ export default function CreateTournamentForm({ judgeId }: Props) {
   const nameId = useId()
   const startId = useId()
   const endId = useId()
-  const teamsId = useId()
 
   // IMPORTANT : on branche directement l'action server
   return (
@@ -47,23 +45,8 @@ export default function CreateTournamentForm({ judgeId }: Props) {
             </div>
           </div>
 
-          {/* Limite d’équipes (et NON de joueurs) */}
-          <div className="space-y-2">
-            <Label htmlFor={teamsId}>Nombre maximum d’équipes</Label>
-            {/* on envoie maxTeams ; côté serveur on fera max_players = maxTeams * 2 */}
-            <Select name="maxTeams" defaultValue="16">
-              <SelectTrigger id={teamsId}>
-                <SelectValue placeholder="Sélectionnez" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="8">8 équipes</SelectItem>
-                <SelectItem value="12">12 équipes</SelectItem>
-                <SelectItem value="16">16 équipes</SelectItem>
-                <SelectItem value="24">24 équipes</SelectItem>
-                <SelectItem value="32">32 équipes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Nombre d'équipes fixé à 16 par défaut */}
+          <input type="hidden" name="maxTeams" value="16" />
 
           <div>
             <Button type="submit" className="w-full">Créer le tournoi</Button>
