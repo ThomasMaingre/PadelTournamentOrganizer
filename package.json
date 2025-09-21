@@ -8,7 +8,6 @@
     "lint": "next lint",
     "start": "next start",
     "sonar": "docker run --rm -e SONAR_HOST_URL=http://host.docker.internal:9000 -e SONAR_TOKEN=$SONAR_TOKEN -v \"$PWD:/usr/src\" -v \"$PWD/.git:/usr/src/.git:ro\" sonarsource/sonar-scanner-cli"
-
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
