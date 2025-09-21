@@ -13,6 +13,7 @@ import AddTeamForm from "@/components/tournaments/add-team-form"
 import BulkTeamForm from "@/components/tournaments/bulk-team-form"
 import TournamentActions from "@/components/tournaments/tournament-actions"
 import RemoveAllTeamsButton from "@/components/tournaments/remove-all-teams-button"
+import DeleteTournamentButton from "@/components/tournaments/delete-tournament-button"
 
 import {
   calculateTeamSeeding,
@@ -43,19 +44,27 @@ export default async function TournamentPage({
   if (!user && !isAdminBypass) redirect("/auth/login")
 
   // Tournoi
-  const tournamentQuery = supabase
+  let tournamentQuery = supabase
     .from("tournaments")
     .select("*")
     .eq("id", id)
 
   // Pour les tests, on skip la vérification judge_id
   if (user && !isAdminBypass) {
-    tournamentQuery.eq("judge_id", user.id)
+    tournamentQuery = tournamentQuery.eq("judge_id", user.id)
   }
 
-  const { data: tournament, error: tErr } = await tournamentQuery.single()
-  if (tErr || !tournament) {
-    if (tErr) console.error("load tournament error:", tErr.message)
+  const { data: tournament, error: tErr } = await tournamentQuery.maybeSingle()
+  if (tErr) {
+    console.error("load tournament error:", tErr.message)
+    console.error("Tournament ID:", id)
+    console.error("User:", user?.id)
+    console.error("Admin bypass:", isAdminBypass)
+    notFound()
+  }
+
+  if (!tournament) {
+    console.log("Tournament not found or access denied:", id)
     notFound()
   }
 
@@ -190,12 +199,18 @@ export default async function TournamentPage({
             </div>
             <div className="flex items-center gap-2">
               {tournament.status !== "completed" ? (
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={`/dashboard/tournaments/${id}/edit`}>
-                    <Edit className="h-4 w-4 mr-2" />
-                    {tournament.status === "draft" ? "Modifier" : "Modifier les dates"}
-                  </Link>
-                </Button>
+                <>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/dashboard/tournaments/${id}/edit`}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      {tournament.status === "draft" ? "Modifier" : "Modifier les dates"}
+                    </Link>
+                  </Button>
+                  <DeleteTournamentButton
+                    tournamentId={id}
+                    tournamentName={tournament.name}
+                  />
+                </>
               ) : (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border bg-muted/50 text-muted-foreground">
                   <Lock className="h-4 w-4" />
@@ -275,6 +290,30 @@ export default async function TournamentPage({
 
           {/* Sidebar */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Actions tournoi */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Actions du tournoi</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TournamentActions
+                  tournamentId={id}
+                  status={tournament.status}
+                  hasMatches={!!(matches && matches.length > 0)}
+                  hasTeams={!!(teams && teams.filter(t => t.name !== 'TBD').length >= 2)}
+                  canComplete={canCompleteTournament}
+                  teamsWithSeeds={teamsWithSeeds}
+                  currentTeamsCount={teams.filter(t => t.name !== 'TBD').length}
+                  maxTeams={Math.floor((tournament.max_players ?? 0) / 2)}
+                  calculateSeedingAction={calculateSeedingAction}
+                  generateBracketAction={generateBracketAction}
+                  startTournamentAction={startTournamentAction}
+                  completeTournamentAction={completeTournamentAction}
+                  resetTournamentAction={resetTournamentAction}
+                />
+              </CardContent>
+            </Card>
+
             {/* Ajout équipe */}
             {tournament.status === "draft" && (
               <>
@@ -319,30 +358,6 @@ export default async function TournamentPage({
                 </CardContent>
               </Card>
             )}
-
-            {/* Actions tournoi */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Actions du tournoi</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <TournamentActions
-                  tournamentId={id}
-                  status={tournament.status}
-                  hasMatches={!!(matches && matches.length > 0)}
-                  hasTeams={!!(teams && teams.filter(t => t.name !== 'TBD').length >= 2)}
-                  canComplete={canCompleteTournament}
-                  teamsWithSeeds={teamsWithSeeds}
-                  currentTeamsCount={teams.filter(t => t.name !== 'TBD').length}
-                  maxTeams={Math.floor((tournament.max_players ?? 0) / 2)}
-                  calculateSeedingAction={calculateSeedingAction}
-                  generateBracketAction={generateBracketAction}
-                  startTournamentAction={startTournamentAction}
-                  completeTournamentAction={completeTournamentAction}
-                  resetTournamentAction={resetTournamentAction}
-                />
-              </CardContent>
-            </Card>
           </div>
         </div>
       </main>

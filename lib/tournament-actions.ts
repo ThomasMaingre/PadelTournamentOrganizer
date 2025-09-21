@@ -1178,6 +1178,9 @@ export async function removeTeam(tournamentId: string, teamId: string) {
     throw new Error("Erreur lors de la suppression de l'équipe: " + teamError.message)
   }
 
+  // Petit délai pour laisser la DB se synchroniser
+  await new Promise(resolve => setTimeout(resolve, 100))
+
   revalidatePath(`/dashboard/tournaments/${tournamentId}`)
   return { success: true }
 }
@@ -1271,4 +1274,77 @@ export async function updateTeam(
 
   revalidatePath(`/dashboard/tournaments/${tournamentId}`)
   return { success: true }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+/** TOURNOI: Supprimer un tournoi complet */
+// ──────────────────────────────────────────────────────────────────────────────
+export async function deleteTournament(tournamentId: string) {
+  const supabase = await createSupabaseServerClient()
+
+  // Vérifier que le tournoi existe
+  const { data: tournament } = await supabase
+    .from("tournaments")
+    .select("name")
+    .eq("id", tournamentId)
+    .single()
+
+  if (!tournament) {
+    throw new Error("Tournoi introuvable")
+  }
+
+  // Supprimer dans l'ordre inverse des dépendances
+
+  // 1. Supprimer les classements finaux
+  const { error: rankingsError } = await supabase
+    .from("tournament_rankings")
+    .delete()
+    .eq("tournament_id", tournamentId)
+
+  if (rankingsError) {
+    console.warn("Erreur suppression rankings:", rankingsError.message)
+  }
+
+  // 2. Supprimer les matchs
+  const { error: matchesError } = await supabase
+    .from("matches")
+    .delete()
+    .eq("tournament_id", tournamentId)
+
+  if (matchesError) {
+    console.warn("Erreur suppression matches:", matchesError.message)
+  }
+
+  // 3. Supprimer les joueurs
+  const { error: playersError } = await supabase
+    .from("players")
+    .delete()
+    .eq("tournament_id", tournamentId)
+
+  if (playersError) {
+    console.warn("Erreur suppression players:", playersError.message)
+  }
+
+  // 4. Supprimer les équipes
+  const { error: teamsError } = await supabase
+    .from("teams")
+    .delete()
+    .eq("tournament_id", tournamentId)
+
+  if (teamsError) {
+    console.warn("Erreur suppression teams:", teamsError.message)
+  }
+
+  // 5. Enfin supprimer le tournoi
+  const { error: tournamentError } = await supabase
+    .from("tournaments")
+    .delete()
+    .eq("id", tournamentId)
+
+  if (tournamentError) {
+    throw new Error("Erreur lors de la suppression du tournoi: " + tournamentError.message)
+  }
+
+  revalidatePath("/dashboard")
+  return { success: true, tournamentName: tournament.name }
 }
