@@ -18,7 +18,10 @@ export default function TournamentTeams({
   teams: Team[]
   tournamentId: string
 }) {
-  if (!teams || teams.length === 0) {
+  // Filtrer l'équipe TBD de l'affichage
+  const realTeams = teams.filter(team => team.name !== 'TBD')
+
+  if (!realTeams || realTeams.length === 0) {
     return (
       <Card className="p-6 text-sm text-muted-foreground">
         Aucune équipe inscrite pour le moment.
@@ -28,7 +31,7 @@ export default function TournamentTeams({
 
   return (
     <div className="space-y-3">
-      {teams.map((team) => (
+      {realTeams.map((team) => (
         <Card key={team.id} className="p-3 md:p-4">
           {/* En-tête compact */}
           <div className="flex items-center justify-between gap-2">
