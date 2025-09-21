@@ -329,7 +329,11 @@ export default async function TournamentPage({
                     <CardDescription>Inscrivez une nouvelle équipe au tournoi</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <AddTeamForm tournamentId={id} />
+                    <AddTeamForm
+                      tournamentId={id}
+                      maxTeams={Math.floor((tournament.max_players ?? 0) / 2)}
+                      currentTeamsCount={teams.filter(t => t.name !== 'TBD').length}
+                    />
                   </CardContent>
                 </Card>
 

@@ -934,7 +934,7 @@ export async function addTeam(
       typeof p.nationalRanking === "number" && p.nationalRanking > 0 ? p.nationalRanking : null,
   }))
   if (players.length !== 2 || players.some((p) => !p.firstName || !p.lastName)) {
-    throw new Error("Une équipe doit avoir exactement 2 joueurs avec prénom et nom.")
+    return { success: false, error: "Une équipe doit avoir exactement 2 joueurs avec prénom et nom." }
   }
 
   // 2) capacité (max_players = nb joueurs, donc maxTeams = /2)
@@ -951,7 +951,7 @@ export async function addTeam(
 
   const maxTeams = tournament ? Math.floor(tournament.max_players / 2) : 16
   if ((currentTeams ?? 0) >= maxTeams) {
-    throw new Error("Le tournoi a atteint sa capacité maximale d'équipes.")
+    return { success: false, error: `Le tournoi a atteint sa capacité maximale de ${maxTeams} équipes.` }
   }
 
   // 3) nom d’équipe (fallback "Nom1/Nom2")
@@ -972,7 +972,7 @@ export async function addTeam(
     .limit(1)
 
   if (existingByName && existingByName.length > 0) {
-    throw new Error("Une équipe avec ce nom existe déjà dans ce tournoi.")
+    return { success: false, error: "Une équipe avec ce nom existe déjà dans ce tournoi." }
   }
 
   // 5) insertion équipe
@@ -989,9 +989,9 @@ export async function addTeam(
   if (teamErr) {
     // gère notamment la contrainte UNIQUE côté DB si tu la mets en place
     if (/duplicate key/i.test(teamErr.message)) {
-      throw new Error("Ce nom d'équipe est déjà utilisé dans ce tournoi.")
+      return { success: false, error: "Ce nom d'équipe est déjà utilisé dans ce tournoi." }
     }
-    throw new Error(teamErr.message)
+    return { success: false, error: teamErr.message }
   }
 
   // 6) insertion joueurs liés à l’équipe
@@ -1008,7 +1008,7 @@ export async function addTeam(
   if (playersErr) {
     // rollback minimal
     await supabase.from("teams").delete().eq("id", team.id)
-    throw new Error(playersErr.message)
+    return { success: false, error: playersErr.message }
   }
 
   revalidatePath(`/dashboard/tournaments/${tournamentId}`)

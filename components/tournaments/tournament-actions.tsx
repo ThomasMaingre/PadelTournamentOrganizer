@@ -273,7 +273,7 @@ export default function TournamentActions({
             Réinitialiser le tournoi
           </ActionButton>
           <p className="text-xs text-muted-foreground mt-2">
-            ⚠️ Cette action supprimera toute progression et remettra le tournoi à zéro.
+            Cette action supprimera toute progression et remettra le tournoi à zéro.
           </p>
         </div>
       )}

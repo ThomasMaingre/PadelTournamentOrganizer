@@ -9,10 +9,13 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Users } from "lucide-react"
 import { addTeam } from "@/lib/tournament-actions"
+import { toast } from "sonner"
 
 interface AddTeamFormProps {
   tournamentId: string
   onTeamAdded?: () => void
+  maxTeams: number
+  currentTeamsCount: number
 }
 
 interface Player {
@@ -21,7 +24,8 @@ interface Player {
   nationalRanking: number | null
 }
 
-export default function AddTeamForm({ tournamentId, onTeamAdded }: AddTeamFormProps) {
+export default function AddTeamForm({ tournamentId, onTeamAdded, maxTeams, currentTeamsCount }: AddTeamFormProps) {
+  const availableSlots = Math.max(0, maxTeams - currentTeamsCount)
   const [players, setPlayers] = useState<Player[]>([
     { firstName: "", lastName: "", nationalRanking: null },
     { firstName: "", lastName: "", nationalRanking: null },
@@ -54,37 +58,62 @@ export default function AddTeamForm({ tournamentId, onTeamAdded }: AddTeamFormPr
 
     const validPlayers = players.filter((p) => p.firstName.trim() && p.lastName.trim())
     if (validPlayers.length !== 2) {
-      alert("Veuillez renseigner les deux joueurs de l'équipe")
+      toast.error("Veuillez renseigner les deux joueurs de l'équipe")
       return
     }
 
     setIsSubmitting(true)
-    try {
-      const finalTeamName = generateTeamName()
-      const pairWeight = calculatePairWeight()
 
-      await addTeam(tournamentId, {
-        name: finalTeamName, // ← on envoie le nom auto
-        players: validPlayers,
-        pairWeight,
-      })
+    const finalTeamName = generateTeamName()
+    const pairWeight = calculatePairWeight()
 
+    const result = await addTeam(tournamentId, {
+      name: finalTeamName,
+      players: validPlayers,
+      pairWeight,
+    })
+
+    if (result.success) {
       // reset
       setPlayers([
         { firstName: "", lastName: "", nationalRanking: null },
         { firstName: "", lastName: "", nationalRanking: null },
       ])
 
+      toast.success("Équipe ajoutée avec succès ✅")
       onTeamAdded?.()
-    } catch (err) {
-      console.error("Erreur lors de l'ajout de l'équipe:", err)
-      alert("Erreur lors de l'ajout de l'équipe")
-    } finally {
-      setIsSubmitting(false)
+    } else {
+      toast.error(result.error || "Erreur lors de l'ajout de l'équipe")
     }
+
+    setIsSubmitting(false)
   }
 
   const pairWeight = calculatePairWeight()
+
+  // Afficher un message informatif quand le tournoi est plein
+  if (availableSlots === 0) {
+    return (
+      <Card className="border-dashed border-gray-200 bg-gray-50/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-gray-700">
+            <Users className="h-5 w-5" />
+            Ajouter une équipe
+          </CardTitle>
+          <p className="text-sm text-gray-600">
+            Le tournoi est complet ({currentTeamsCount}/{maxTeams} équipes)
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-sm text-blue-700 text-center">
+              Toutes les places sont occupées. Vous pouvez maintenant configurer les têtes de série et démarrer le tournoi.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card>
