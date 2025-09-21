@@ -2,12 +2,11 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-import { signOut } from "@/lib/actions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import UserDropdown from "@/components/user-dropdown"
 import {
   Trophy,
-  LogOut,
   Plus,
   CalendarCheck,
   History as HistoryIcon,
@@ -69,13 +68,25 @@ export default async function DashboardPage({
     data: { user },
     error: userErr,
   } = await supabase.auth.getUser()
+
+  console.log("🔍 Dashboard - Auth check:", {
+    hasUser: !!user,
+    userId: user?.id,
+    userEmail: user?.email,
+    hasError: !!userErr,
+    errorMessage: userErr?.message
+  })
+
   if (userErr) console.error("getUser (dashboard):", userErr.message)
-  if (!user) redirect("/auth/login")
+  if (!user) {
+    console.log("❌ Dashboard - No user found, redirecting to login")
+    redirect("/auth/login")
+  }
 
   // Profil juge (facultatif)
   const { data: judge } = await supabase
     .from("judges")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, avatar_url")
     .eq("id", user.id)
     .maybeSingle()
 
@@ -124,18 +135,17 @@ export default async function DashboardPage({
               >
                 <div>
                   <h1 className="text-xl font-bold">Padel Tournament Organizer</h1>
-                  <p className="text-sm text-muted-foreground">
-                    Bienvenue, {judge?.first_name ?? ""} {judge?.last_name ?? ""}
-                  </p>
                 </div>
               </Link>
             </div>
-            <form action={signOut}>
-              <Button type="submit" variant="outline" size="sm">
-                <LogOut className="h-4 w-4 mr-2" />
-                Déconnexion
-              </Button>
-            </form>
+            <UserDropdown
+              user={{
+                first_name: judge?.first_name,
+                last_name: judge?.last_name,
+                email: user?.email,
+                avatar_url: judge?.avatar_url,
+              }}
+            />
           </div>
         </div>
       </header>
