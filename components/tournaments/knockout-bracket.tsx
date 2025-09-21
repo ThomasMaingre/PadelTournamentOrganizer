@@ -156,7 +156,7 @@ const LABEL: Record<string, string> = {
   final: "Finale",
 }
 
-export default function KnockoutBracket({ matches, tournamentId }: { matches: Match[]; tournamentId?: string }) {
+export default function KnockoutBracket({ matches, tournamentId, tournamentStatus }: { matches: Match[]; tournamentId?: string; tournamentStatus?: string }) {
   // Filtrer les BYE matches du 1er tour (ne pas les afficher)
   const filteredMatches = matches.filter(m => {
     // Enlever les BYE matches du round_of_16 (1er tour)
@@ -240,9 +240,23 @@ export default function KnockoutBracket({ matches, tournamentId }: { matches: Ma
                     />
                   </div>
 
-                  {m.status !== "completed" && !hasTBD && (
+                  {m.status !== "completed" && !hasTBD && tournamentStatus === "in_progress" && (
                     <div className="mt-4">
                       <EnterScoreDialog match={m} tournamentId={tournamentId || m.tournament_id || ""} />
+                    </div>
+                  )}
+
+                  {m.status !== "completed" && !hasTBD && tournamentStatus !== "in_progress" && (
+                    <div className="mt-4">
+                      <button
+                        disabled
+                        className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium rounded-md h-8 px-3 border bg-background opacity-50 cursor-not-allowed"
+                      >
+                        Saisir le score
+                      </button>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Le tournoi doit être démarré pour saisir les scores
+                      </p>
                     </div>
                   )}
                 </div>

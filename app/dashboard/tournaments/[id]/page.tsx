@@ -143,6 +143,9 @@ export default async function TournamentPage({
   const finalMatch = matches?.find((m) => m.match_type === "final")
   const canCompleteTournament = finalMatch?.status === "completed" && tournament.status === "in_progress"
 
+  // Vérifier si les équipes ont des positions de tête de série
+  const teamsWithSeeds = teams.some(team => team.seed_position !== null && team.name !== 'TBD')
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary">
       {/* Header */}
@@ -226,7 +229,7 @@ export default async function TournamentPage({
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold">Tableau à élimination directe</h2>
                 </div>
-                <KnockoutBracket matches={matches || []} tournamentId={id} />
+                <KnockoutBracket matches={matches || []} tournamentId={id} tournamentStatus={tournament.status} />
               </TabsContent>
 
               {/* PODIUM */}
@@ -272,6 +275,7 @@ export default async function TournamentPage({
                   hasMatches={!!(matches && matches.length > 0)}
                   hasTeams={!!(teams && teams.filter(t => t.name !== 'TBD').length >= 2)}
                   canComplete={canCompleteTournament}
+                  teamsWithSeeds={teamsWithSeeds}
                   calculateSeedingAction={calculateSeedingAction}
                   generateBracketAction={generateBracketAction}
                   startTournamentAction={startTournamentAction}

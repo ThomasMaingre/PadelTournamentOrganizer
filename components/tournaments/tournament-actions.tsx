@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
-import { Target, Trophy, Play, RotateCcw } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Target, Trophy, Play, RotateCcw, CheckCircle } from "lucide-react"
 import { toast } from "sonner"
 
 type ActionButtonProps = {
@@ -52,7 +53,7 @@ function ActionButton({
       onClick={handleClick}
       disabled={disabled || isPending}
       variant={variant}
-      className="w-full bg-transparent"
+      className="w-full"
     >
       {isPending ? (
         <>
@@ -75,6 +76,7 @@ export default function TournamentActions({
   hasMatches,
   hasTeams,
   canComplete,
+  teamsWithSeeds,
   calculateSeedingAction,
   generateBracketAction,
   startTournamentAction,
@@ -86,70 +88,159 @@ export default function TournamentActions({
   hasMatches: boolean
   hasTeams: boolean
   canComplete: boolean
+  teamsWithSeeds: boolean
   calculateSeedingAction: () => Promise<any>
   generateBracketAction: () => Promise<any>
   startTournamentAction: () => Promise<any>
   completeTournamentAction: () => Promise<any>
   resetTournamentAction: () => Promise<any>
 }) {
+  // Logique pour déterminer quelle étape afficher
+  const getNextStep = () => {
+    if (status === "completed") {
+      return {
+        type: "completed",
+        title: "Tournoi terminé",
+        description: "Le tournoi est terminé. Consultez le podium pour voir les résultats finaux.",
+        stepNumber: null,
+        totalSteps: 3
+      }
+    }
+
+    if (status === "in_progress") {
+      if (canComplete) {
+        return {
+          type: "complete",
+          title: "Clôturer le tournoi",
+          description: "La finale est terminée. Vous pouvez maintenant clôturer le tournoi pour générer le classement final.",
+          stepNumber: null,
+          totalSteps: 3,
+          action: completeTournamentAction,
+          actionText: "Clôturer le tournoi",
+          variant: "default" as const,
+          icon: <Trophy className="h-4 w-4" />,
+          loadingText: "Clôture du tournoi...",
+          successText: "Tournoi clôturé !"
+        }
+      } else {
+        return {
+          type: "in_progress",
+          title: "Tournoi en cours",
+          description: "Le tournoi est en cours. Les joueurs disputent leurs matchs. Une fois la finale terminée, vous pourrez clôturer le tournoi.",
+          stepNumber: null,
+          totalSteps: 3
+        }
+      }
+    }
+
+    // Status "draft" - étapes de préparation
+    if (!hasTeams) {
+      return {
+        type: "need_teams",
+        title: "Ajoutez des équipes",
+        description: "Commencez par ajouter au moins 2 équipes au tournoi avant de pouvoir continuer.",
+        stepNumber: null,
+        totalSteps: 3
+      }
+    }
+
+    if (!teamsWithSeeds) {
+      return {
+        type: "calculate_seeding",
+        title: "Calculer les têtes de série",
+        description: "Première étape : calculez les têtes de série en fonction des classements des joueurs. Cela déterminera l'ordre des équipes dans le tableau.",
+        stepNumber: 1,
+        totalSteps: 3,
+        action: calculateSeedingAction,
+        actionText: "Calculer les têtes de série",
+        variant: "outline" as const,
+        icon: <Target className="h-4 w-4" />,
+        loadingText: "Calcul des têtes de série...",
+        successText: "Têtes de série calculées !"
+      }
+    }
+
+    if (!hasMatches) {
+      return {
+        type: "generate_bracket",
+        title: "Générer le tableau",
+        description: "Deuxième étape : créez le tableau d'élimination directe avec les équipes positionnées selon leurs têtes de série.",
+        stepNumber: 2,
+        totalSteps: 3,
+        action: generateBracketAction,
+        actionText: "Générer le tableau",
+        variant: "outline" as const,
+        icon: <Trophy className="h-4 w-4" />,
+        loadingText: "Génération du tableau...",
+        successText: "Tableau généré !"
+      }
+    }
+
+    return {
+      type: "start_tournament",
+      title: "Démarrer le tournoi",
+      description: "Troisième étape : lancez officiellement le tournoi. Les joueurs pourront commencer à jouer leurs matchs.",
+      stepNumber: 3,
+      totalSteps: 3,
+      action: startTournamentAction,
+      actionText: "Démarrer le tournoi",
+      variant: "default" as const,
+      icon: <Play className="h-4 w-4" />,
+      loadingText: "Démarrage du tournoi...",
+      successText: "Tournoi démarré !"
+    }
+  }
+
+  const step = getNextStep()
+
   return (
-    <div className="space-y-3">
-      {status === "draft" && (
-        <>
-          <ActionButton
-            action={calculateSeedingAction}
-            disabled={!hasTeams}
-            icon={<Target className="h-4 w-4" />}
-            loadingText="Calcul des têtes de série..."
-            successText="Têtes de série calculées !"
-          >
-            Calculer les têtes de série
-          </ActionButton>
-
-          <ActionButton
-            action={generateBracketAction}
-            disabled={!hasTeams}
-            icon={<Trophy className="h-4 w-4" />}
-            loadingText="Génération du tableau..."
-            successText="Tableau généré !"
-          >
-            Générer le tableau
-          </ActionButton>
-
-          <ActionButton
-            action={startTournamentAction}
-            disabled={!hasMatches}
-            variant="default"
-            icon={<Play className="h-4 w-4" />}
-            loadingText="Démarrage du tournoi..."
-            successText="Tournoi démarré !"
-          >
-            Démarrer le tournoi
-          </ActionButton>
-        </>
+    <div className="space-y-4">
+      {/* Indicateur d'étape */}
+      {step.stepNumber && (
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">
+            Étape {step.stepNumber} / {step.totalSteps}
+          </Badge>
+        </div>
       )}
 
-      {status === "in_progress" && canComplete && (
+      {/* Titre et description */}
+      <div className="space-y-2">
+        <h3 className="font-semibold text-base">{step.title}</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {step.description}
+        </p>
+      </div>
+
+      {/* Action principale */}
+      {step.action && (
         <ActionButton
-          action={completeTournamentAction}
-          variant="default"
-          loadingText="Clôture du tournoi..."
-          successText="Tournoi clôturé !"
+          action={step.action}
+          variant={step.variant}
+          icon={step.icon}
+          loadingText={step.loadingText}
+          successText={step.successText}
         >
-          Clôturer le tournoi
+          {step.actionText}
         </ActionButton>
       )}
 
-      {status !== "completed" && (
-        <ActionButton
-          action={resetTournamentAction}
-          variant="destructive"
-          icon={<RotateCcw className="h-4 w-4" />}
-          loadingText="Réinitialisation..."
-          successText="Tournoi réinitialisé !"
-        >
-          Réinitialiser le tournoi
-        </ActionButton>
+      {/* Bouton de réinitialisation (seulement si tournoi commencé) */}
+      {(status === "in_progress" || (status === "draft" && (teamsWithSeeds || hasMatches))) && (
+        <div className="pt-4 border-t">
+          <ActionButton
+            action={resetTournamentAction}
+            variant="destructive"
+            icon={<RotateCcw className="h-4 w-4" />}
+            loadingText="Réinitialisation..."
+            successText="Tournoi réinitialisé !"
+          >
+            Réinitialiser le tournoi
+          </ActionButton>
+          <p className="text-xs text-muted-foreground mt-2">
+            ⚠️ Cette action supprimera toute progression et remettra le tournoi à zéro.
+          </p>
+        </div>
       )}
     </div>
   )
