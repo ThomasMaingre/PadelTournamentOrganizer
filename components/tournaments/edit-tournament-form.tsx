@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { updateTournament } from "@/lib/tournament-actions"
 import { toast } from "sonner"
+import { createSlug } from "@/lib/utils/slug"
 
 type Tournament = {
   id: string
@@ -66,7 +67,9 @@ export default function EditTournamentForm({ tournament }: EditTournamentFormPro
       })
 
       toast.success("Tournoi modifié avec succès")
-      router.push(`/dashboard/tournaments/${tournament.id}`)
+      // Utiliser le nom du tournoi (modifié si c'est le cas) pour créer le slug
+      const tournamentSlug = createSlug(formData.name.trim())
+      router.push(`/dashboard/tournaments/${tournamentSlug}`)
     } catch (error) {
       console.error("Erreur lors de la modification:", error)
       toast.error("Erreur lors de la modification du tournoi")
@@ -76,7 +79,8 @@ export default function EditTournamentForm({ tournament }: EditTournamentFormPro
   }
 
   const handleCancel = () => {
-    router.push(`/dashboard/tournaments/${tournament.id}`)
+    const tournamentSlug = createSlug(tournament.name)
+    router.push(`/dashboard/tournaments/${tournamentSlug}`)
   }
 
   return (

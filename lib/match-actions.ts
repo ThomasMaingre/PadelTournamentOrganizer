@@ -80,7 +80,7 @@ export async function updateMatchScore(prevState: any, formData: FormData) {
     // Check if we need to advance players to next round
     await checkAndAdvancePlayers(tournamentId.toString(), matchId.toString())
 
-    revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+    revalidatePath("/dashboard/tournaments/[id]", "page")
     return { success: "Score mis à jour avec succès" }
   } catch (error) {
     console.error("Erreur mise à jour score:", error)
@@ -106,7 +106,7 @@ export async function startMatch(matchId: string, tournamentId: string) {
       throw new Error(error.message)
     }
 
-    revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+    revalidatePath("/dashboard/tournaments/[id]", "page")
   } catch (error) {
     console.error("Erreur démarrage match:", error)
     throw error

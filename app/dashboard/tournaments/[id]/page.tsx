@@ -24,13 +24,14 @@ import {
 } from "@/lib/tournament-actions"
 import { completeTournament } from "@/lib/ranking-actions"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
+import { createSlug } from "@/lib/utils/slug"
 
 export default async function TournamentPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
-  const { id } = await params
+  const { id: tournamentSlug } = await params
 
   const supabase = await createSupabaseServerClient()
 
@@ -44,30 +45,34 @@ export default async function TournamentPage({
   if (userErr) console.error("getUser (tournament page):", userErr.message)
   if (!user && !isAdminBypass) redirect("/auth/login")
 
-  // Tournoi
-  let tournamentQuery = supabase
+  // Récupérer tous les tournois pour trouver celui qui correspond au slug
+  let allTournamentsQuery = supabase
     .from("tournaments")
     .select("*")
-    .eq("id", id)
 
   // Pour les tests, on skip la vérification judge_id
   if (user && !isAdminBypass) {
-    tournamentQuery = tournamentQuery.eq("judge_id", user.id)
+    allTournamentsQuery = allTournamentsQuery.eq("judge_id", user.id)
   }
 
-  const { data: tournament, error: tErr } = await tournamentQuery.maybeSingle()
+  const { data: allTournaments, error: tErr } = await allTournamentsQuery
+
+  // Trouver le tournoi qui correspond au slug
+  const tournament = allTournaments?.find(t => createSlug(t.name) === tournamentSlug)
   if (tErr) {
     console.error("load tournament error:", tErr.message)
-    console.error("Tournament ID:", id)
+    console.error("Tournament Slug:", tournamentSlug)
     console.error("User:", user?.id)
     console.error("Admin bypass:", isAdminBypass)
     notFound()
   }
 
   if (!tournament) {
-    console.log("Tournament not found or access denied:", id)
+    console.log("Tournament not found or access denied:", tournamentSlug)
     notFound()
   }
+
+  const id = tournament.id
 
   // Équipes (avec joueurs)
   const { data: teamsRaw, error: teamsErr } = await supabase
@@ -207,7 +212,7 @@ export default async function TournamentPage({
               {tournament.status !== "completed" ? (
                 <>
                   <Button variant="outline" size="sm" asChild>
-                    <Link href={`/dashboard/tournaments/${id}/edit`}>
+                    <Link href={`/dashboard/tournaments/${tournamentSlug}/edit`}>
                       <Edit className="h-4 w-4 mr-2" />
                       {tournament.status === "draft" ? "Modifier" : "Modifier les dates"}
                     </Link>

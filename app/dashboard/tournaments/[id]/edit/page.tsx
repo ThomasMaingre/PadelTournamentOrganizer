@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import EditTournamentForm from "@/components/tournaments/edit-tournament-form"
+import { createSlug } from "@/lib/utils/slug"
 
 export default async function EditTournamentPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
-  const { id } = await params
+  const { id: tournamentSlug } = await params
 
   const supabase = await createSupabaseServerClient()
 
@@ -27,25 +28,36 @@ export default async function EditTournamentPage({
   if (userErr) console.error("getUser (edit tournament):", userErr.message)
   if (!user && !isAdminBypass) redirect("/auth/login")
 
-  // Récupérer le tournoi
-  const tournamentQuery = supabase
+  // Récupérer tous les tournois pour trouver celui qui correspond au slug
+  let allTournamentsQuery = supabase
     .from("tournaments")
     .select("*")
-    .eq("id", id)
 
+  // Pour les tests, on skip la vérification judge_id
   if (user && !isAdminBypass) {
-    tournamentQuery.eq("judge_id", user.id)
+    allTournamentsQuery = allTournamentsQuery.eq("judge_id", user.id)
   }
 
-  const { data: tournament, error: tErr } = await tournamentQuery.single()
-  if (tErr || !tournament) {
-    if (tErr) console.error("load tournament error:", tErr.message)
+  const { data: allTournaments, error: tErr } = await allTournamentsQuery
+
+  // Trouver le tournoi qui correspond au slug
+  const tournament = allTournaments?.find(t => createSlug(t.name) === tournamentSlug)
+  if (tErr) {
+    console.error("load tournament error:", tErr.message)
+    console.error("Tournament Slug:", tournamentSlug)
+    console.error("User:", user?.id)
+    console.error("Admin bypass:", isAdminBypass)
+    notFound()
+  }
+
+  if (!tournament) {
+    console.log("Tournament not found or access denied:", tournamentSlug)
     notFound()
   }
 
   // Les tournois terminés ne peuvent pas être modifiés
   if (tournament.status === "completed") {
-    redirect(`/dashboard/tournaments/${id}`)
+    redirect(`/dashboard/tournaments/${tournamentSlug}`)
   }
 
   return (
@@ -56,7 +68,7 @@ export default async function EditTournamentPage({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Button asChild variant="ghost" size="sm">
-                <Link href={`/dashboard/tournaments/${id}`}>
+                <Link href={`/dashboard/tournaments/${tournamentSlug}`}>
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Retour au tournoi
                 </Link>

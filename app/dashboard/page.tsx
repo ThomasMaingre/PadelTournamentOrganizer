@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
+import { createSlug } from "@/lib/utils/slug"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import UserDropdown from "@/components/user-dropdown"
@@ -213,7 +214,7 @@ export default async function DashboardPage({
             )}
 
             {(tournaments ?? []).map((t) => (
-              <Link key={t.id} href={`/dashboard/tournaments/${t.id}`} className="block">
+              <Link key={t.id} href={`/dashboard/tournaments/${createSlug(t.name)}`} className="block">
                 <div className="group rounded-2xl border bg-card hover:bg-white/60 transition shadow-sm hover:shadow-md">
                   <div className="px-4 py-4 flex items-center gap-4">
                     <Logo size={40} className="shrink-0 rounded-xl" />

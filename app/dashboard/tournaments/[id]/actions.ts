@@ -38,6 +38,6 @@ export async function addTeamAction(tournamentId: string, formData: FormData) {
     return { error: pErr.message }
   }
 
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true }
 }

@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { calculateFinalRankings } from "./ranking-actions"
+import { createSlug } from "@/lib/utils/slug"
 
 import { cookies } from "next/headers"
 import { createServerClient } from "@supabase/ssr"
@@ -34,6 +35,23 @@ export async function createSupabaseClient() {
   )
 }
 
+// Helper function to get tournament slug from ID for revalidation
+async function getTournamentSlug(tournamentId: string): Promise<string | null> {
+  try {
+    const supabase = await createSupabaseClient()
+    const { data: tournament } = await supabase
+      .from("tournaments")
+      .select("name")
+      .eq("id", tournamentId)
+      .single()
+
+    return tournament ? createSlug(tournament.name) : null
+  } catch (error) {
+    console.error("Error getting tournament slug:", error)
+    return null
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 /** TOURNOI / EQUIPES (création, seeding, etc.) */
 // ──────────────────────────────────────────────────────────────────────────────
@@ -50,6 +68,17 @@ export async function createTournament(formData: FormData) {
 
   if (!name || !judgeId || !startDate) {
     return { error: "Veuillez remplir tous les champs obligatoires (nom, date de début)." }
+  }
+
+  // Vérifier l'unicité du nom (insensible à la casse)
+  const { data: existingTournament } = await supabase
+    .from("tournaments")
+    .select("id")
+    .ilike("name", name)
+    .limit(1)
+
+  if (existingTournament && existingTournament.length > 0) {
+    return { error: "Un tournoi avec ce nom existe déjà. Veuillez choisir un autre nom." }
   }
 
   const { data, error } = await supabase
@@ -71,7 +100,7 @@ export async function createTournament(formData: FormData) {
   }
 
   revalidatePath("/dashboard")
-  redirect(`/dashboard/tournaments/${data.id}`)
+  return { success: true, tournamentId: data.id, tournamentSlug: createSlug(name) }
 }
 
 export async function addPlayer(prevState: any, formData: FormData) {
@@ -118,7 +147,7 @@ export async function addPlayer(prevState: any, formData: FormData) {
       return { error: "Erreur lors de l'ajout du joueur. Veuillez réessayer." }
     }
 
-    revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+    revalidatePath("/dashboard/tournaments/[id]", "page")
     return { success: "Joueur ajouté avec succès !" }
   } catch (error) {
     console.error("Erreur ajout joueur:", error)
@@ -146,7 +175,7 @@ export async function calculateTeamSeeding(tournamentId: string) {
   for (const [idx, team] of (teams ?? []).entries()) {
     await supabase.from("teams").update({ seed_position: idx + 1 }).eq("id", team.id)
   }
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -287,7 +316,7 @@ export async function generateKnockoutBracket(tournamentId: string) {
 
   console.log(`✅ Bracket créé: ${rows.length} matches 1er tour, ${byes} BYE automatiques`)
 
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true }
 }
 
@@ -298,7 +327,7 @@ export async function startTournament(tournamentId: string) {
     .update({ status: "in_progress" })
     .eq("id", tournamentId)
   if (error) throw new Error(error.message)
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true }
 }
 
@@ -442,7 +471,7 @@ export async function updateMatchScore(prev: any, formData: FormData) {
     }
   }
 
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: "Score enregistré" }
 }
 
@@ -1011,7 +1040,7 @@ export async function addTeam(
     return { success: false, error: playersErr.message }
   }
 
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true, teamId: team.id }
 }
 
@@ -1030,7 +1059,7 @@ export async function completeTournament(tournamentId: string) {
     .update({ status: "completed" })
     .eq("id", tournamentId)
   if (error) throw new Error(error.message)
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true }
 }
 
@@ -1048,7 +1077,7 @@ export async function resetTournament(tournamentId: string) {
     .eq("id", tournamentId)
 
   if (error) throw new Error(error.message)
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true }
 }
 
@@ -1066,10 +1095,10 @@ export async function updateTournament(
 ) {
   const supabase = await createSupabaseServerClient()
 
-  // Vérifier que le tournoi est en brouillon
+  // Vérifier que le tournoi existe et récupérer ses données actuelles
   const { data: tournament } = await supabase
     .from("tournaments")
-    .select("status")
+    .select("status, name")
     .eq("id", tournamentId)
     .single()
 
@@ -1085,6 +1114,20 @@ export async function updateTournament(
 
   // Si le tournoi est en brouillon, on peut tout modifier
   if (tournament.status === "draft") {
+    // Vérifier l'unicité du nom seulement si le nom change
+    if (data.name !== tournament.name) {
+      const { data: existingTournament } = await supabase
+        .from("tournaments")
+        .select("id")
+        .ilike("name", data.name)
+        .neq("id", tournamentId) // Exclure le tournoi actuel
+        .limit(1)
+
+      if (existingTournament && existingTournament.length > 0) {
+        throw new Error("Un tournoi avec ce nom existe déjà. Veuillez choisir un autre nom.")
+      }
+    }
+
     updateData.name = data.name
     updateData.max_players = data.max_players
   }
@@ -1097,8 +1140,8 @@ export async function updateTournament(
 
   if (error) throw new Error(error.message)
 
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
-  revalidatePath(`/dashboard/tournaments/${tournamentId}/edit`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
+  revalidatePath("/dashboard/tournaments/[id]/edit", "page")
   return { success: true }
 }
 
@@ -1143,7 +1186,7 @@ export async function removeAllTeams(tournamentId: string) {
     throw new Error("Erreur lors de la suppression des équipes: " + teamsError.message)
   }
 
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true }
 }
 
@@ -1193,7 +1236,7 @@ export async function removeTeam(tournamentId: string, teamId: string) {
   // Petit délai pour laisser la DB se synchroniser
   await new Promise(resolve => setTimeout(resolve, 100))
 
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true }
 }
 
@@ -1284,7 +1327,7 @@ export async function updateTeam(
     throw new Error("Erreur lors de la mise à jour du joueur 2: " + player2Error.message)
   }
 
-  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true }
 }
 

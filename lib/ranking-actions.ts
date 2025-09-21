@@ -245,7 +245,7 @@ export async function calculateFinalRankings(tournamentId: string) {
       throw new Error(insertError.message)
     }
 
-    revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+    revalidatePath("/dashboard/tournaments/[id]", "page")
     return { success: true }
   } catch (error) {
     console.error("Erreur calcul classement final:", error)
@@ -276,7 +276,7 @@ export async function completeTournament(tournamentId: string) {
     // Calculate final rankings
     await calculateFinalRankings(tournamentId)
 
-    revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+    revalidatePath("/dashboard/tournaments/[id]", "page")
     return { success: true }
   } catch (error) {
     console.error("Erreur clôture tournoi:", error)
