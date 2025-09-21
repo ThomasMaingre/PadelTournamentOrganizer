@@ -49,7 +49,7 @@ export async function createTournament(formData: FormData) {
   const max_players = maxTeams * 2
 
   if (!name || !judgeId || !startDate) {
-    return { error: "Nom, date de début et juge requis" }
+    return { error: "Veuillez remplir tous les champs obligatoires (nom, date de début)." }
   }
 
   const { data, error } = await supabase
@@ -65,14 +65,17 @@ export async function createTournament(formData: FormData) {
     .select("id")
     .single()
 
-  if (error) return { error: error.message }
+  if (error) {
+    console.error("Erreur création tournoi:", error)
+    return { error: "Erreur lors de la création du tournoi. Veuillez réessayer." }
+  }
 
   revalidatePath("/dashboard")
   redirect(`/dashboard/tournaments/${data.id}`)
 }
 
 export async function addPlayer(prevState: any, formData: FormData) {
-  if (!formData) return { error: "Données du formulaire manquantes" }
+  if (!formData) return { error: "Erreur de formulaire. Veuillez réessayer." }
 
   const firstName = formData.get("firstName")
   const lastName = formData.get("lastName")
@@ -80,7 +83,7 @@ export async function addPlayer(prevState: any, formData: FormData) {
   const tournamentId = formData.get("tournamentId")
 
   if (!firstName || !lastName || !tournamentId)
-    return { error: "Prénom, nom et tournoi requis" }
+    return { error: "Veuillez saisir le prénom et le nom du joueur." }
 
   const supabase = await createSupabaseClient()
 
@@ -97,7 +100,7 @@ export async function addPlayer(prevState: any, formData: FormData) {
       .eq("tournament_id", String(tournamentId))
 
     if (tournament && currentPlayers && currentPlayers >= tournament.max_players) {
-      return { error: "Le tournoi a atteint sa capacité maximale" }
+      return { error: "Le tournoi est complet. Impossible d'ajouter plus de joueurs." }
     }
 
     const { error } = await supabase.from("players").insert({
@@ -107,13 +110,19 @@ export async function addPlayer(prevState: any, formData: FormData) {
       tournament_id: String(tournamentId),
     })
 
-    if (error) return { error: error.message }
+    if (error) {
+      console.error("Erreur ajout joueur:", error)
+      if (error.message.includes("duplicate")) {
+        return { error: "Ce joueur est déjà inscrit au tournoi." }
+      }
+      return { error: "Erreur lors de l'ajout du joueur. Veuillez réessayer." }
+    }
 
     revalidatePath(`/dashboard/tournaments/${tournamentId}`)
-    return { success: "Joueur ajouté avec succès" }
+    return { success: "Joueur ajouté avec succès !" }
   } catch (error) {
     console.error("Erreur ajout joueur:", error)
-    return { error: "Une erreur inattendue s'est produite. Veuillez réessayer." }
+    return { error: "Erreur lors de l'ajout du joueur. Veuillez vérifier votre connexion et réessayer." }
   }
 }
 
@@ -341,7 +350,7 @@ export async function updateMatchScore(prev: any, formData: FormData) {
     ? String(formData.get("retiredTeamId"))
     : null
 
-  if (!matchId || !tournamentId) return { error: "Paramètres manquants" }
+  if (!matchId || !tournamentId) return { error: "Informations du match manquantes." }
 
   const supabase = await createSupabaseClient()
 
@@ -351,7 +360,7 @@ export async function updateMatchScore(prev: any, formData: FormData) {
     .select("id, match_type, team1_id, team2_id, created_at")
     .eq("id", matchId)
     .single()
-  if (mErr || !m) return { error: mErr?.message || "Match introuvable" }
+  if (mErr || !m) return { error: "Match introuvable. Veuillez vérifier les informations." }
 
   // calcule le vainqueur
   let winnerTeamId: string | null = null
@@ -411,7 +420,10 @@ export async function updateMatchScore(prev: any, formData: FormData) {
       .from("matches")
       .update(payload)
       .eq("id", matchId)
-    if (error) return { error: error.message }
+    if (error) {
+      console.error("Erreur mise à jour score:", error)
+      return { error: "Erreur lors de l'enregistrement du score. Veuillez réessayer." }
+    }
   }
 
   // avancement auto (crée le match du tour suivant quand le pair-mate est fini)

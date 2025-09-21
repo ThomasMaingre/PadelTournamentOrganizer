@@ -40,7 +40,7 @@ export async function calculateFinalRankings(tournamentId: string) {
     // Get final match to determine winner and runner-up
     const { data: finalMatch } = await supabase
       .from("matches")
-      .select("winner_id, player1_id, player2_id, status")
+      .select("winner_team_id, team1_id, team2_id, status")
       .eq("tournament_id", tournamentId)
       .eq("match_type", "final")
       .single()
@@ -48,27 +48,27 @@ export async function calculateFinalRankings(tournamentId: string) {
     // Get third place match
     const { data: thirdPlaceMatch } = await supabase
       .from("matches")
-      .select("winner_id, player1_id, player2_id, status")
+      .select("winner_team_id, team1_id, team2_id, status")
       .eq("tournament_id", tournamentId)
       .eq("match_type", "third_place")
       .single()
 
-    // Get all players and their match statistics
-    const { data: players } = await supabase.from("players").select("*").eq("tournament_id", tournamentId)
+    // Get all teams and their match statistics
+    const { data: teams } = await supabase.from("teams").select("*").eq("tournament_id", tournamentId)
 
-    if (!players) {
-      throw new Error("Aucun joueur trouvé pour ce tournoi")
+    if (!teams) {
+      throw new Error("Aucune équipe trouvée pour ce tournoi")
     }
 
-    // Calculate statistics for each player
-    const playerStats = await Promise.all(
-      players.map(async (player) => {
-        // Get all matches for this player
+    // Calculate statistics for each team
+    const teamStats = await Promise.all(
+      teams.map(async (team) => {
+        // Get all matches for this team
         const { data: matches } = await supabase
           .from("matches")
           .select("*")
           .eq("tournament_id", tournamentId)
-          .or(`player1_id.eq.${player.id},player2_id.eq.${player.id}`)
+          .or(`team1_id.eq.${team.id},team2_id.eq.${team.id}`)
           .eq("status", "completed")
 
         let matchesWon = 0
@@ -78,18 +78,18 @@ export async function calculateFinalRankings(tournamentId: string) {
 
         if (matches) {
           for (const match of matches) {
-            if (match.player1_id === player.id) {
-              pointsFor += match.player1_score
-              pointsAgainst += match.player2_score
-              if (match.winner_id === player.id) {
+            if (match.team1_id === team.id) {
+              pointsFor += match.player1_score || 0
+              pointsAgainst += match.player2_score || 0
+              if (match.winner_team_id === team.id) {
                 matchesWon++
               } else {
                 matchesLost++
               }
             } else {
-              pointsFor += match.player2_score
-              pointsAgainst += match.player1_score
-              if (match.winner_id === player.id) {
+              pointsFor += match.player2_score || 0
+              pointsAgainst += match.player1_score || 0
+              if (match.winner_team_id === team.id) {
                 matchesWon++
               } else {
                 matchesLost++
@@ -99,7 +99,7 @@ export async function calculateFinalRankings(tournamentId: string) {
         }
 
         return {
-          ...player,
+          ...team,
           matches_won: matchesWon,
           matches_lost: matchesLost,
           points_for: pointsFor,
@@ -113,11 +113,11 @@ export async function calculateFinalRankings(tournamentId: string) {
     const rankings = []
 
     // 1st place - Final winner
-    if (finalMatch?.winner_id) {
-      const winner = playerStats.find((p) => p.id === finalMatch.winner_id)
+    if (finalMatch?.winner_team_id) {
+      const winner = teamStats.find((t) => t.id === finalMatch.winner_team_id)
       if (winner) {
         rankings.push({
-          player_id: winner.id,
+          team_id: winner.id,
           final_position: 1,
           points_earned: winner.points_for,
           matches_won: winner.matches_won,
@@ -127,12 +127,12 @@ export async function calculateFinalRankings(tournamentId: string) {
     }
 
     // 2nd place - Final loser
-    if (finalMatch?.player1_id && finalMatch?.player2_id && finalMatch?.winner_id) {
-      const runnerId = finalMatch.winner_id === finalMatch.player1_id ? finalMatch.player2_id : finalMatch.player1_id
-      const runner = playerStats.find((p) => p.id === runnerId)
+    if (finalMatch?.team1_id && finalMatch?.team2_id && finalMatch?.winner_team_id) {
+      const runnerId = finalMatch.winner_team_id === finalMatch.team1_id ? finalMatch.team2_id : finalMatch.team1_id
+      const runner = teamStats.find((t) => t.id === runnerId)
       if (runner) {
         rankings.push({
-          player_id: runner.id,
+          team_id: runner.id,
           final_position: 2,
           points_earned: runner.points_for,
           matches_won: runner.matches_won,
@@ -142,11 +142,11 @@ export async function calculateFinalRankings(tournamentId: string) {
     }
 
     // 3rd place - Third place match winner
-    if (thirdPlaceMatch?.winner_id) {
-      const thirdPlace = playerStats.find((p) => p.id === thirdPlaceMatch.winner_id)
+    if (thirdPlaceMatch?.winner_team_id) {
+      const thirdPlace = teamStats.find((t) => t.id === thirdPlaceMatch.winner_team_id)
       if (thirdPlace) {
         rankings.push({
-          player_id: thirdPlace.id,
+          team_id: thirdPlace.id,
           final_position: 3,
           points_earned: thirdPlace.points_for,
           matches_won: thirdPlace.matches_won,
@@ -155,16 +155,16 @@ export async function calculateFinalRankings(tournamentId: string) {
       }
     }
 
-    // 4th place - Third place match loser
-    if (thirdPlaceMatch?.player1_id && thirdPlaceMatch?.player2_id && thirdPlaceMatch?.winner_id) {
+    // 4th place - Third place match loser (si il y a un match pour la 3ème place)
+    if (thirdPlaceMatch?.team1_id && thirdPlaceMatch?.team2_id && thirdPlaceMatch?.winner_team_id) {
       const fourthId =
-        thirdPlaceMatch.winner_id === thirdPlaceMatch.player1_id
-          ? thirdPlaceMatch.player2_id
-          : thirdPlaceMatch.player1_id
-      const fourth = playerStats.find((p) => p.id === fourthId)
+        thirdPlaceMatch.winner_team_id === thirdPlaceMatch.team1_id
+          ? thirdPlaceMatch.team2_id
+          : thirdPlaceMatch.team1_id
+      const fourth = teamStats.find((t) => t.id === fourthId)
       if (fourth) {
         rankings.push({
-          player_id: fourth.id,
+          team_id: fourth.id,
           final_position: 4,
           points_earned: fourth.points_for,
           matches_won: fourth.matches_won,
@@ -173,10 +173,10 @@ export async function calculateFinalRankings(tournamentId: string) {
       }
     }
 
-    // Remaining players - sort by performance
-    const rankedPlayerIds = rankings.map((r) => r.player_id)
-    const remainingPlayers = playerStats
-      .filter((p) => !rankedPlayerIds.includes(p.id))
+    // Remaining teams - sort by performance et gérer les ex æquo
+    const rankedTeamIds = rankings.map((r) => r.team_id)
+    const remainingTeams = teamStats
+      .filter((t) => !rankedTeamIds.includes(t.id))
       .sort((a, b) => {
         // Sort by matches won, then by points difference
         if (a.matches_won !== b.matches_won) {
@@ -185,16 +185,50 @@ export async function calculateFinalRankings(tournamentId: string) {
         return b.points_difference - a.points_difference
       })
 
-    // Add remaining players to rankings
-    remainingPlayers.forEach((player, index) => {
+    // Add remaining teams to rankings en gérant les ex æquo
+    let currentPosition = rankings.length + 1
+    let previousStats = null
+
+    remainingTeams.forEach((team, index) => {
+      // Si les stats sont identiques au précédent, même position
+      if (previousStats &&
+          team.matches_won === previousStats.matches_won &&
+          team.points_difference === previousStats.points_difference) {
+        // Garde la même position que le précédent
+      } else {
+        // Nouvelle position = nombre d'équipes déjà classées + 1
+        currentPosition = rankings.length + 1
+      }
+
       rankings.push({
-        player_id: player.id,
-        final_position: rankings.length + 1,
-        points_earned: player.points_for,
-        matches_won: player.matches_won,
-        matches_lost: player.matches_lost,
+        team_id: team.id,
+        final_position: currentPosition,
+        points_earned: team.points_for,
+        matches_won: team.matches_won,
+        matches_lost: team.matches_lost,
       })
+
+      previousStats = team
     })
+
+    // Cas spécial : Si pas de match pour la 3ème place, les demi-finalistes perdants sont ex æquo 3ème
+    if (!thirdPlaceMatch && finalMatch) {
+      const semifinalLosers = teamStats.filter(team =>
+        !rankedTeamIds.includes(team.id) &&
+        team.matches_won > 0 && // Ont gagné au moins un match (donc pas éliminés au 1er tour)
+        rankings.length < 4 // Pas encore 4 équipes classées
+      )
+
+      if (semifinalLosers.length >= 2) {
+        // Mettre les 2 demi-finalistes perdants à égalité en 3ème place
+        semifinalLosers.slice(0, 2).forEach(team => {
+          const existingRanking = rankings.find(r => r.team_id === team.id)
+          if (existingRanking) {
+            existingRanking.final_position = 3
+          }
+        })
+      }
+    }
 
     // Clear existing rankings
     await supabase.from("tournament_rankings").delete().eq("tournament_id", tournamentId)

@@ -9,11 +9,15 @@ interface Ranking {
   points_earned: number
   matches_won: number
   matches_lost: number
-  players: {
+  teams: {
     id: string
-    first_name: string
-    last_name: string
-  }
+    name: string
+    players: {
+      id: string
+      first_name: string
+      last_name: string
+    }[]
+  } | null
 }
 
 interface FinalRankingsProps {
@@ -22,6 +26,17 @@ interface FinalRankingsProps {
 }
 
 export default function FinalRankings({ rankings, tournamentName }: FinalRankingsProps) {
+  const getTeamDisplayName = (team: Ranking["teams"] | undefined) => {
+    if (!team) {
+      return "Équipe inconnue"
+    }
+    if (team.name) {
+      return team.name
+    }
+    // Si pas de nom d'équipe, utiliser les noms des joueurs
+    return team.players.map(p => `${p.first_name} ${p.last_name}`).join(" / ")
+  }
+
   const getPositionIcon = (position: number) => {
     switch (position) {
       case 1:
@@ -48,17 +63,22 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
     }
   }
 
-  const getPositionLabel = (position: number) => {
+  const getPositionLabel = (position: number, isExAequo: boolean = false) => {
+    const suffix = isExAequo ? " ex æquo" : ""
     switch (position) {
       case 1:
-        return "Champion"
+        return "Champion" + suffix
       case 2:
-        return "Finaliste"
+        return "Finaliste" + suffix
       case 3:
-        return "3ème place"
+        return "3ème place" + suffix
       default:
-        return `${position}ème place`
+        return `${position}ème place` + suffix
     }
+  }
+
+  const isPositionTied = (position: number) => {
+    return rankings.filter(r => r.final_position === position).length > 1
   }
 
   if (rankings.length === 0) {
@@ -81,7 +101,7 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
     <div className="space-y-8">
       {/* Tournament Title */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold mb-2">🏆 {tournamentName}</h2>
+        <h2 className="text-3xl font-bold mb-2">{tournamentName}</h2>
         <p className="text-muted-foreground">Classement final du tournoi</p>
       </div>
 
@@ -94,12 +114,14 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
               <Card className={`border-2 ${getPositionColor(2)} transform md:-translate-y-4`}>
                 <CardHeader className="text-center pb-2">
                   <div className="flex justify-center mb-2">{getPositionIcon(2)}</div>
-                  <CardTitle className="text-lg">2ème place</CardTitle>
+                  <CardTitle className="text-lg">{getPositionLabel(2, isPositionTied(2))}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center">
                   <div className="font-bold text-xl mb-2">
-                    {podium.find((p) => p.final_position === 2)?.players.first_name}{" "}
-                    {podium.find((p) => p.final_position === 2)?.players.last_name}
+                    {podium
+                      .filter((p) => p.final_position === 2)
+                      .map((ranking) => getTeamDisplayName(ranking.teams))
+                      .join(" & ")}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {podium.find((p) => p.final_position === 2)?.matches_won}V -{" "}
@@ -119,12 +141,14 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
               <Card className={`border-2 ${getPositionColor(1)} transform md:-translate-y-8`}>
                 <CardHeader className="text-center pb-2">
                   <div className="flex justify-center mb-2">{getPositionIcon(1)}</div>
-                  <CardTitle className="text-xl">Champion</CardTitle>
+                  <CardTitle className="text-xl">{getPositionLabel(1, isPositionTied(1))}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center">
                   <div className="font-bold text-2xl mb-2">
-                    {podium.find((p) => p.final_position === 1)?.players.first_name}{" "}
-                    {podium.find((p) => p.final_position === 1)?.players.last_name}
+                    {podium
+                      .filter((p) => p.final_position === 1)
+                      .map((ranking) => getTeamDisplayName(ranking.teams))
+                      .join(" & ")}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {podium.find((p) => p.final_position === 1)?.matches_won}V -{" "}
@@ -144,12 +168,14 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
               <Card className={`border-2 ${getPositionColor(3)} transform md:-translate-y-2`}>
                 <CardHeader className="text-center pb-2">
                   <div className="flex justify-center mb-2">{getPositionIcon(3)}</div>
-                  <CardTitle className="text-lg">3ème place</CardTitle>
+                  <CardTitle className="text-lg">{getPositionLabel(3, isPositionTied(3))}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center">
                   <div className="font-bold text-xl mb-2">
-                    {podium.find((p) => p.final_position === 3)?.players.first_name}{" "}
-                    {podium.find((p) => p.final_position === 3)?.players.last_name}
+                    {podium
+                      .filter((p) => p.final_position === 3)
+                      .map((ranking) => getTeamDisplayName(ranking.teams))
+                      .join(" & ")}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {podium.find((p) => p.final_position === 3)?.matches_won}V -{" "}
@@ -175,9 +201,11 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {rankings.map((ranking) => (
+            {rankings
+              .filter((ranking) => ranking.teams) // Filtrer les rankings sans équipe
+              .map((ranking) => (
               <div
-                key={ranking.players.id}
+                key={ranking.teams.id}
                 className={`flex items-center justify-between p-4 rounded-lg border-2 ${getPositionColor(ranking.final_position)}`}
               >
                 <div className="flex items-center gap-4">
@@ -187,9 +215,9 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
                   </div>
                   <div>
                     <div className="font-semibold text-lg">
-                      {ranking.players.first_name} {ranking.players.last_name}
+                      {getTeamDisplayName(ranking.teams)}
                     </div>
-                    <div className="text-sm text-muted-foreground">{getPositionLabel(ranking.final_position)}</div>
+                    <div className="text-sm text-muted-foreground">{getPositionLabel(ranking.final_position, isPositionTied(ranking.final_position))}</div>
                   </div>
                 </div>
                 <div className="text-right">

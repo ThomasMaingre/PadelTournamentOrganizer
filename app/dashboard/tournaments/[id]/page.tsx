@@ -139,9 +139,14 @@ export default async function TournamentPage({
       points_earned,
       matches_won,
       matches_lost,
-      players ( id, first_name, last_name )
+      teams (
+        id,
+        name,
+        players ( id, first_name, last_name )
+      )
     `)
     .eq("tournament_id", id)
+    .not("team_id", "is", null)
     .order("final_position")
 
   // Server actions
@@ -338,7 +343,7 @@ export default async function TournamentPage({
             )}
 
             {/* Informations tournoi démarré */}
-            {tournament.status !== "draft" && (
+            {tournament.status === "in_progress" && (
               <Card className="border-amber-200 bg-amber-50/30">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2 text-amber-700">
