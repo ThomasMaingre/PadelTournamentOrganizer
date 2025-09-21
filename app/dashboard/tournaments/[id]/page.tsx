@@ -1,6 +1,6 @@
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
-import { Trophy, ArrowLeft, Users, Plus, Settings } from "lucide-react"
+import { Trophy, ArrowLeft, Users, Plus, Settings, Edit, Lock } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,7 @@ import FinalRankings from "@/components/tournaments/final-rankings"
 import AddTeamForm from "@/components/tournaments/add-team-form"
 import BulkTeamForm from "@/components/tournaments/bulk-team-form"
 import TournamentActions from "@/components/tournaments/tournament-actions"
+import RemoveAllTeamsButton from "@/components/tournaments/remove-all-teams-button"
 
 import {
   calculateTeamSeeding,
@@ -68,7 +69,7 @@ export default async function TournamentPage({
 
   const { data: playersByTeam } = await supabase
     .from("players")
-    .select("id, first_name, last_name, team_id")
+    .select("id, first_name, last_name, team_id, national_ranking")
     .eq("tournament_id", id)
 
   const teams =
@@ -170,10 +171,19 @@ export default async function TournamentPage({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4 mr-2" />
-                Paramètres
-              </Button>
+              {tournament.status !== "completed" ? (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/dashboard/tournaments/${id}/edit`}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    {tournament.status === "draft" ? "Modifier" : "Modifier les dates"}
+                  </Link>
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border bg-muted/50 text-muted-foreground">
+                  <Lock className="h-4 w-4" />
+                  <span className="text-sm">Tournoi terminé</span>
+                </div>
+              )}
               <span
                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tournament.status === "completed"
                     ? "bg-green-100 text-green-800"
@@ -213,15 +223,21 @@ export default async function TournamentPage({
                     Équipes inscrites
                   </h2>
                   {tournament.status === "draft" && (
-                    <Button size="sm" asChild>
-                      <Link href="#add-team">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Ajouter une équipe
-                      </Link>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <RemoveAllTeamsButton
+                        tournamentId={id}
+                        teamsCount={teams.filter(t => t.name !== 'TBD').length}
+                      />
+                      <Button size="sm" asChild>
+                        <Link href="#add-team">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Ajouter une équipe
+                        </Link>
+                      </Button>
+                    </div>
                   )}
                 </div>
-                <TournamentTeams teams={teams} tournamentId={id} />
+                <TournamentTeams teams={teams} tournamentId={id} tournamentStatus={tournament.status} />
               </TabsContent>
 
               {/* TABLEAU */}
@@ -263,6 +279,29 @@ export default async function TournamentPage({
               </>
             )}
 
+            {/* Informations tournoi démarré */}
+            {tournament.status !== "draft" && (
+              <Card className="border-amber-200 bg-amber-50/30">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2 text-amber-700">
+                    <Lock className="h-5 w-5" />
+                    Tournoi en cours
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-amber-700 mb-3">
+                    Ce tournoi a été démarré et ne peut plus être modifié.
+                    Les paramètres du tournoi et la liste des équipes sont verrouillés.
+                  </p>
+                  <div className="text-xs text-amber-600">
+                    <p>• Impossible de modifier le nom ou les paramètres</p>
+                    <p>• Impossible d'ajouter ou supprimer des équipes</p>
+                    <p>• Seule la réinitialisation peut remettre à zéro</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Actions tournoi */}
             <Card>
               <CardHeader>
@@ -276,6 +315,8 @@ export default async function TournamentPage({
                   hasTeams={!!(teams && teams.filter(t => t.name !== 'TBD').length >= 2)}
                   canComplete={canCompleteTournament}
                   teamsWithSeeds={teamsWithSeeds}
+                  currentTeamsCount={teams.filter(t => t.name !== 'TBD').length}
+                  maxTeams={Math.floor((tournament.max_players ?? 0) / 2)}
                   calculateSeedingAction={calculateSeedingAction}
                   generateBracketAction={generateBracketAction}
                   startTournamentAction={startTournamentAction}

@@ -2,8 +2,10 @@
 
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import DeleteTeamButton from "./delete-team-button"
+import EditTeamDialog from "./edit-team-dialog"
 
-type Player = { id: string; first_name: string; last_name: string }
+type Player = { id: string; first_name: string; last_name: string; national_ranking?: number | null }
 type Team = {
   id: string
   name: string | null
@@ -14,9 +16,12 @@ type Team = {
 
 export default function TournamentTeams({
   teams,
+  tournamentId,
+  tournamentStatus,
 }: {
   teams: Team[]
   tournamentId: string
+  tournamentStatus?: string
 }) {
   // Filtrer l'équipe TBD de l'affichage
   const realTeams = teams.filter(team => team.name !== 'TBD')
@@ -46,6 +51,17 @@ export default function TournamentTeams({
               <Badge variant="secondary" className="h-6 px-2 text-[10px] md:text-xs">
                 Poids de paire {team.pair_weight ?? "—"}
               </Badge>
+              <EditTeamDialog
+                tournamentId={tournamentId}
+                team={team}
+                tournamentStatus={tournamentStatus || "draft"}
+              />
+              <DeleteTeamButton
+                tournamentId={tournamentId}
+                teamId={team.id}
+                teamName={team.name || "Équipe sans nom"}
+                tournamentStatus={tournamentStatus || "draft"}
+              />
             </div>
           </div>
 

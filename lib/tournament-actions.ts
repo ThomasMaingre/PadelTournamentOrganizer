@@ -1039,3 +1039,236 @@ export async function resetTournament(tournamentId: string) {
   revalidatePath(`/dashboard/tournaments/${tournamentId}`)
   return { success: true }
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+/** TOURNOI: Modifier */
+// ──────────────────────────────────────────────────────────────────────────────
+export async function updateTournament(
+  tournamentId: string,
+  data: {
+    name: string
+    max_players: number
+    start_date: string | null
+    end_date: string | null
+  }
+) {
+  const supabase = await createSupabaseServerClient()
+
+  // Vérifier que le tournoi est en brouillon
+  const { data: tournament } = await supabase
+    .from("tournaments")
+    .select("status")
+    .eq("id", tournamentId)
+    .single()
+
+  if (!tournament) {
+    throw new Error("Tournoi introuvable")
+  }
+
+  // Préparer les champs à mettre à jour selon le statut du tournoi
+  const updateData: any = {
+    start_date: data.start_date,
+    end_date: data.end_date,
+  }
+
+  // Si le tournoi est en brouillon, on peut tout modifier
+  if (tournament.status === "draft") {
+    updateData.name = data.name
+    updateData.max_players = data.max_players
+  }
+
+  // Mettre à jour le tournoi
+  const { error } = await supabase
+    .from("tournaments")
+    .update(updateData)
+    .eq("id", tournamentId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  revalidatePath(`/dashboard/tournaments/${tournamentId}/edit`)
+  return { success: true }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+/** TOURNOI: Supprimer toutes les équipes */
+// ──────────────────────────────────────────────────────────────────────────────
+export async function removeAllTeams(tournamentId: string) {
+  const supabase = await createSupabaseServerClient()
+
+  // Vérifier que le tournoi est en brouillon
+  const { data: tournament } = await supabase
+    .from("tournaments")
+    .select("status")
+    .eq("id", tournamentId)
+    .single()
+
+  if (!tournament) {
+    throw new Error("Tournoi introuvable")
+  }
+
+  if (tournament.status !== "draft") {
+    throw new Error("Impossible de supprimer les équipes d'un tournoi déjà démarré")
+  }
+
+  // Supprimer tous les joueurs du tournoi
+  const { error: playersError } = await supabase
+    .from("players")
+    .delete()
+    .eq("tournament_id", tournamentId)
+
+  if (playersError) {
+    throw new Error("Erreur lors de la suppression des joueurs: " + playersError.message)
+  }
+
+  // Supprimer toutes les équipes du tournoi
+  const { error: teamsError } = await supabase
+    .from("teams")
+    .delete()
+    .eq("tournament_id", tournamentId)
+
+  if (teamsError) {
+    throw new Error("Erreur lors de la suppression des équipes: " + teamsError.message)
+  }
+
+  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  return { success: true }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+/** TOURNOI: Supprimer une équipe */
+// ──────────────────────────────────────────────────────────────────────────────
+export async function removeTeam(tournamentId: string, teamId: string) {
+  const supabase = await createSupabaseServerClient()
+
+  // Vérifier que le tournoi est en brouillon
+  const { data: tournament } = await supabase
+    .from("tournaments")
+    .select("status")
+    .eq("id", tournamentId)
+    .single()
+
+  if (!tournament) {
+    throw new Error("Tournoi introuvable")
+  }
+
+  if (tournament.status !== "draft") {
+    throw new Error("Impossible de supprimer une équipe d'un tournoi déjà démarré")
+  }
+
+  // Supprimer les joueurs de l'équipe
+  const { error: playersError } = await supabase
+    .from("players")
+    .delete()
+    .eq("team_id", teamId)
+    .eq("tournament_id", tournamentId)
+
+  if (playersError) {
+    throw new Error("Erreur lors de la suppression des joueurs: " + playersError.message)
+  }
+
+  // Supprimer l'équipe
+  const { error: teamError } = await supabase
+    .from("teams")
+    .delete()
+    .eq("id", teamId)
+    .eq("tournament_id", tournamentId)
+
+  if (teamError) {
+    throw new Error("Erreur lors de la suppression de l'équipe: " + teamError.message)
+  }
+
+  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  return { success: true }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+/** TOURNOI: Modifier une équipe */
+// ──────────────────────────────────────────────────────────────────────────────
+export async function updateTeam(
+  tournamentId: string,
+  teamId: string,
+  data: {
+    teamName: string
+    player1: { firstName: string; lastName: string; nationalRanking: number | null }
+    player2: { firstName: string; lastName: string; nationalRanking: number | null }
+  }
+) {
+  const supabase = await createSupabaseServerClient()
+
+  // Vérifier que le tournoi est en brouillon
+  const { data: tournament } = await supabase
+    .from("tournaments")
+    .select("status")
+    .eq("id", tournamentId)
+    .single()
+
+  if (!tournament) {
+    throw new Error("Tournoi introuvable")
+  }
+
+  if (tournament.status !== "draft") {
+    throw new Error("Impossible de modifier une équipe d'un tournoi déjà démarré")
+  }
+
+  // Récupérer les joueurs de l'équipe
+  const { data: players } = await supabase
+    .from("players")
+    .select("id")
+    .eq("team_id", teamId)
+    .eq("tournament_id", tournamentId)
+    .order("created_at")
+
+  if (!players || players.length !== 2) {
+    throw new Error("Équipe incomplète")
+  }
+
+  // Calculer le nouveau poids de paire
+  const rankings = [data.player1.nationalRanking, data.player2.nationalRanking]
+    .filter((r): r is number => r !== null && r > 0)
+  const pairWeight = rankings.length === 2 ? rankings[0] + rankings[1] : null
+
+  // Mettre à jour le nom de l'équipe et le poids de paire
+  const { error: teamError } = await supabase
+    .from("teams")
+    .update({
+      name: data.teamName,
+      pair_weight: pairWeight,
+    })
+    .eq("id", teamId)
+
+  if (teamError) {
+    throw new Error("Erreur lors de la mise à jour de l'équipe: " + teamError.message)
+  }
+
+  // Mettre à jour le premier joueur
+  const { error: player1Error } = await supabase
+    .from("players")
+    .update({
+      first_name: data.player1.firstName,
+      last_name: data.player1.lastName,
+      national_ranking: data.player1.nationalRanking,
+    })
+    .eq("id", players[0].id)
+
+  if (player1Error) {
+    throw new Error("Erreur lors de la mise à jour du joueur 1: " + player1Error.message)
+  }
+
+  // Mettre à jour le deuxième joueur
+  const { error: player2Error } = await supabase
+    .from("players")
+    .update({
+      first_name: data.player2.firstName,
+      last_name: data.player2.lastName,
+      national_ranking: data.player2.nationalRanking,
+    })
+    .eq("id", players[1].id)
+
+  if (player2Error) {
+    throw new Error("Erreur lors de la mise à jour du joueur 2: " + player2Error.message)
+  }
+
+  revalidatePath(`/dashboard/tournaments/${tournamentId}`)
+  return { success: true }
+}

@@ -77,6 +77,8 @@ export default function TournamentActions({
   hasTeams,
   canComplete,
   teamsWithSeeds,
+  currentTeamsCount,
+  maxTeams,
   calculateSeedingAction,
   generateBracketAction,
   startTournamentAction,
@@ -89,12 +91,18 @@ export default function TournamentActions({
   hasTeams: boolean
   canComplete: boolean
   teamsWithSeeds: boolean
+  currentTeamsCount: number
+  maxTeams: number
   calculateSeedingAction: () => Promise<any>
   generateBracketAction: () => Promise<any>
   startTournamentAction: () => Promise<any>
   completeTournamentAction: () => Promise<any>
   resetTournamentAction: () => Promise<any>
 }) {
+  // Vérifier s'il y a trop d'équipes
+  const hasTooManyTeams = currentTeamsCount > maxTeams
+  const excessTeams = currentTeamsCount - maxTeams
+
   // Logique pour déterminer quelle étape afficher
   const getNextStep = () => {
     if (status === "completed") {
@@ -134,6 +142,19 @@ export default function TournamentActions({
     }
 
     // Status "draft" - étapes de préparation
+
+    // Vérifier s'il y a trop d'équipes avant tout
+    if (hasTooManyTeams) {
+      return {
+        type: "too_many_teams",
+        title: "Attention : trop d'équipes",
+        description: `Votre tournoi contient ${currentTeamsCount} équipes mais ne peut en accueillir que ${maxTeams}. Veuillez supprimer ${excessTeams} équipe${excessTeams > 1 ? 's' : ''} avant de continuer.`,
+        stepNumber: null,
+        totalSteps: 3,
+        isError: true
+      }
+    }
+
     if (!hasTeams) {
       return {
         type: "need_teams",
@@ -192,6 +213,20 @@ export default function TournamentActions({
   }
 
   const step = getNextStep()
+
+  // Si c'est un message d'erreur, afficher seulement l'erreur
+  if (step.isError) {
+    return (
+      <div className="space-y-4">
+        <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+          <h3 className="font-semibold text-base text-red-800">{step.title}</h3>
+          <p className="text-sm text-red-700 mt-2 leading-relaxed">
+            {step.description}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
