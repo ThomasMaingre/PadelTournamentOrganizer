@@ -434,6 +434,7 @@ export async function updateMatchScore(prev: any, formData: FormData) {
     winner_id: null,
     status: "completed",
     completed_at: new Date().toISOString(),
+    retired_team_id: retiredTeamId,
   }
 
   let upErr = null

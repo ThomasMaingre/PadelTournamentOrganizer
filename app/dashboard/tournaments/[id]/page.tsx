@@ -128,6 +128,7 @@ export default async function TournamentPage({
     winner_team_id,
     tournament_id,
     created_at,
+    retired_team_id,
     team1:teams!matches_team1_id_fkey ( id, name, seed_position ),
     team2:teams!matches_team2_id_fkey ( id, name, seed_position )
   `)

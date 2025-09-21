@@ -93,9 +93,9 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
     )
   }
 
-  // Separate podium (top 3) from the rest
-  const podium = rankings.filter((r) => r.final_position <= 3).sort((a, b) => a.final_position - b.final_position)
-  const otherRankings = rankings.filter((r) => r.final_position > 3).sort((a, b) => a.final_position - b.final_position)
+  // Separate podium (top 3) from the rest, exclude TBD teams
+  const podium = rankings.filter((r) => r.final_position <= 3 && r.teams && r.teams.name !== 'TBD').sort((a, b) => a.final_position - b.final_position)
+  const otherRankings = rankings.filter((r) => r.final_position > 3 && r.teams && r.teams.name !== 'TBD').sort((a, b) => a.final_position - b.final_position)
 
   return (
     <div className="space-y-8">
@@ -123,13 +123,6 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
                       .map((ranking) => getTeamDisplayName(ranking.teams))
                       .join(" & ")}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {podium.find((p) => p.final_position === 2)?.matches_won}V -{" "}
-                    {podium.find((p) => p.final_position === 2)?.matches_lost}D
-                  </div>
-                  <Badge variant="secondary" className="mt-2">
-                    {podium.find((p) => p.final_position === 2)?.points_earned} pts
-                  </Badge>
                 </CardContent>
               </Card>
             </div>
@@ -150,13 +143,6 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
                       .map((ranking) => getTeamDisplayName(ranking.teams))
                       .join(" & ")}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {podium.find((p) => p.final_position === 1)?.matches_won}V -{" "}
-                    {podium.find((p) => p.final_position === 1)?.matches_lost}D
-                  </div>
-                  <Badge variant="default" className="mt-2">
-                    {podium.find((p) => p.final_position === 1)?.points_earned} pts
-                  </Badge>
                 </CardContent>
               </Card>
             </div>
@@ -177,13 +163,6 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
                       .map((ranking) => getTeamDisplayName(ranking.teams))
                       .join(" & ")}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {podium.find((p) => p.final_position === 3)?.matches_won}V -{" "}
-                    {podium.find((p) => p.final_position === 3)?.matches_lost}D
-                  </div>
-                  <Badge variant="secondary" className="mt-2">
-                    {podium.find((p) => p.final_position === 3)?.points_earned} pts
-                  </Badge>
                 </CardContent>
               </Card>
             </div>
@@ -202,7 +181,7 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
         <CardContent>
           <div className="space-y-3">
             {rankings
-              .filter((ranking) => ranking.teams) // Filtrer les rankings sans équipe
+              .filter((ranking) => ranking.teams && ranking.teams.name !== 'TBD') // Filtrer les rankings sans équipe et les équipes TBD
               .map((ranking) => (
               <div
                 key={ranking.teams.id}
@@ -219,14 +198,6 @@ export default function FinalRankings({ rankings, tournamentName }: FinalRanking
                     </div>
                     <div className="text-sm text-muted-foreground">{getPositionLabel(ranking.final_position, isPositionTied(ranking.final_position))}</div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold">
-                    {ranking.matches_won}V - {ranking.matches_lost}D
-                  </div>
-                  <Badge variant="outline" className="mt-1">
-                    {ranking.points_earned} points
-                  </Badge>
                 </div>
               </div>
             ))}

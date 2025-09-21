@@ -145,6 +145,7 @@ type Match = {
   tournament_id?: string
   round_number?: number
   winner_team_id?: string | null
+  retired_team_id?: string | null
 }
 
 const LABEL: Record<string, string> = {
@@ -224,6 +225,8 @@ export default function KnockoutBracket({ matches, tournamentId, tournamentStatu
                       isBye={false}
                       showTBDForQuarters={false}
                       hideScore={hasTBD}
+                      retiredTeamId={m.retired_team_id}
+                      teamId={m.team1_id}
                     />
                     <Row
                       team={m.team2}
@@ -237,6 +240,8 @@ export default function KnockoutBracket({ matches, tournamentId, tournamentStatu
                         m.status === "scheduled"
                       }
                       hideScore={hasTBD}
+                      retiredTeamId={m.retired_team_id}
+                      teamId={m.team2_id}
                     />
                   </div>
 
@@ -269,7 +274,7 @@ export default function KnockoutBracket({ matches, tournamentId, tournamentStatu
   )
 }
 
-function Row({ team, score, isWinner, forceTBD, isBye, showTBDForQuarters, hideScore }: { team?: Team | null; score: number | null; isWinner?: boolean; forceTBD?: boolean; isBye?: boolean; showTBDForQuarters?: boolean; hideScore?: boolean }) {
+function Row({ team, score, isWinner, forceTBD, isBye, showTBDForQuarters, hideScore, retiredTeamId, teamId }: { team?: Team | null; score: number | null; isWinner?: boolean; forceTBD?: boolean; isBye?: boolean; showTBDForQuarters?: boolean; hideScore?: boolean; retiredTeamId?: string | null; teamId?: string | null }) {
   return (
     <div className={`flex items-center justify-between ${isWinner ? 'font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded' : ''}`}>
       <div className="truncate flex items-center gap-2">
@@ -287,7 +292,13 @@ function Row({ team, score, isWinner, forceTBD, isBye, showTBDForQuarters, hideS
         {!forceTBD && !isBye && !showTBDForQuarters && team?.name !== 'TBD' && team?.seed_position ? <span className="ml-2 text-xs text-muted-foreground">#{team.seed_position}</span> : null}
         {isWinner && !isBye && !showTBDForQuarters && team?.name !== 'TBD' && <span className="text-blue-600 text-xs font-bold">VAINQUEUR</span>}
       </div>
-      <div className="text-sm font-medium">{hideScore ? '' : (isBye ? 0 : (team?.name === 'TBD' ? '' : (score ?? 0)))}</div>
+      <div className="text-sm font-medium">
+        {hideScore ? '' :
+         isBye ? 0 :
+         team?.name === 'TBD' ? '' :
+         retiredTeamId ? (retiredTeamId === teamId ? 'DNF' : '') :
+         (score ?? 0)}
+      </div>
     </div>
   )
 }

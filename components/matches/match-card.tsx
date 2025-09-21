@@ -21,6 +21,7 @@ interface MatchCardProps {
     player1_id: string
     player2_id: string
     winner_id: string | null
+    retired_team_id?: string | null
     players_player1_idToplayers?: {
       first_name: string
       last_name: string
@@ -119,7 +120,7 @@ export default function MatchCard({ match, tournamentId }: MatchCardProps) {
             {match.status === "completed" ? (
               <div className="text-center">
                 <div className="text-lg font-bold">
-                  {match.player1_score} - {match.player2_score}
+                  {match.retired_team_id ? "DNF" : `${match.player1_score} - ${match.player2_score}`}
                 </div>
                 <Dialog open={isScoreDialogOpen} onOpenChange={setIsScoreDialogOpen}>
                   <DialogTrigger asChild>
@@ -140,7 +141,7 @@ export default function MatchCard({ match, tournamentId }: MatchCardProps) {
               <div className="flex items-center gap-2">
                 <div className="text-center">
                   <div className="text-lg font-bold">
-                    {match.player1_score} - {match.player2_score}
+                    {match.retired_team_id ? "DNF" : `${match.player1_score} - ${match.player2_score}`}
                   </div>
                 </div>
                 <Dialog open={isScoreDialogOpen} onOpenChange={setIsScoreDialogOpen}>
