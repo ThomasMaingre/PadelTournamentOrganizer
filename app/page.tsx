@@ -2,7 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Trophy, Users, Calendar, BarChart3 } from "lucide-react"
+import { Trophy, Users, Calendar, BarChart3, Medal } from "lucide-react"
 import Link from "next/link"
 import Logo from "@/components/ui/logo"
 
@@ -91,7 +91,7 @@ export default async function Home() {
 
           <Card className="text-center">
             <CardHeader>
-              <Logo size={48} className="mx-auto mb-4" />
+              <Medal className="h-12 w-12 text-primary mx-auto mb-4" />
               <CardTitle>Têtes de série</CardTitle>
             </CardHeader>
             <CardContent>
@@ -122,19 +122,19 @@ export default async function Home() {
 
         {/* Benefits Section */}
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-8">Pourquoi choisir notre solution ?</h2>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+          <h2 className="text-3xl font-bold text-foreground mb-8">Les avantages de notre plateforme</h2>
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             <div>
-              <h3 className="text-xl font-semibold text-foreground mb-4">⚡ Gain de temps</h3>
-              <p className="text-muted-foreground">Fini les calculs manuels et les erreurs de planning</p>
+              <h3 className="text-xl font-semibold text-foreground mb-4">Efficacité maximale</h3>
+              <p className="text-muted-foreground">Automatisation complète des calculs et du planning. Plus d'erreurs humaines, plus de temps perdu en calculs manuels fastidieux.</p>
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-foreground mb-4">📱 Responsive</h3>
-              <p className="text-muted-foreground">Utilisable sur tablette pendant vos tournois</p>
+              <h3 className="text-xl font-semibold text-foreground mb-4">Mobilité totale</h3>
+              <p className="text-muted-foreground">Interface optimisée pour tablettes et smartphones. Gérez vos tournois directement sur le terrain, en temps réel.</p>
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-foreground mb-4">🎯 Précision</h3>
-              <p className="text-muted-foreground">Organisation parfaite selon les règles officielles</p>
+              <h3 className="text-xl font-semibold text-foreground mb-4">Conformité garantie</h3>
+              <p className="text-muted-foreground">Respect strict des règlements FFT et FIP. Organisation professionnelle conforme aux standards officiels du padel.</p>
             </div>
           </div>
         </div>
