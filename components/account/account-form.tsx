@@ -29,7 +29,6 @@ export default function AccountForm({ user }: AccountFormProps) {
   const [profileData, setProfileData] = useState({
     first_name: user.first_name,
     last_name: user.last_name,
-    email: user.email,
   })
 
   const userInitials = `${user.first_name?.[0] ?? ''}${user.last_name?.[0] ?? ''}`.toUpperCase() || 'U'
@@ -39,6 +38,7 @@ export default function AccountForm({ user }: AccountFormProps) {
   }
 
   const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   })
@@ -56,19 +56,19 @@ export default function AccountForm({ user }: AccountFormProps) {
       return
     }
 
-    if (!profileData.email.trim()) {
-      toast.error("L'email est requis")
-      return
-    }
 
     setIsUpdatingProfile(true)
     try {
       await updateProfile(user.id, {
         first_name: profileData.first_name.trim(),
         last_name: profileData.last_name.trim(),
-        email: profileData.email.trim(),
       })
-      toast.success("Profil mis à jour avec succès")
+
+      // Délai pour s'assurer que le toast s'affiche avant le revalidatePath
+      setTimeout(() => {
+        toast.success("Profil mis à jour avec succès ✅")
+      }, 100)
+
     } catch (error) {
       console.error("Erreur lors de la mise à jour:", error)
       toast.error("Erreur lors de la mise à jour du profil")
@@ -79,6 +79,11 @@ export default function AccountForm({ user }: AccountFormProps) {
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!passwordData.currentPassword) {
+      toast.error("Le mot de passe actuel est requis")
+      return
+    }
 
     if (!passwordData.newPassword) {
       toast.error("Le nouveau mot de passe est requis")
@@ -95,18 +100,24 @@ export default function AccountForm({ user }: AccountFormProps) {
       return
     }
 
+    if (passwordData.currentPassword === passwordData.newPassword) {
+      toast.error("Le nouveau mot de passe doit être différent de l'actuel")
+      return
+    }
+
     setIsUpdatingPassword(true)
-    try {
-      await updatePassword("", passwordData.newPassword)
-      toast.success("Mot de passe mis à jour avec succès")
-      setPasswordData({
-        newPassword: "",
-        confirmPassword: "",
-      })
-    } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error)
-      toast.error("Erreur lors de la mise à jour du mot de passe")
-    } finally {
+
+    const result = await updatePassword(passwordData.currentPassword, passwordData.newPassword)
+
+    if (result.success) {
+      toast.success("Mot de passe mis à jour avec succès. Reconnexion nécessaire...")
+
+      // Déconnexion automatique après 2 secondes
+      setTimeout(() => {
+        window.location.href = "/auth/login"
+      }, 2000)
+    } else {
+      toast.error(result.error || "Erreur lors de la mise à jour du mot de passe")
       setIsUpdatingPassword(false)
     }
   }
@@ -150,14 +161,17 @@ export default function AccountForm({ user }: AccountFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">Email *</Label>
+          <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
-            value={profileData.email}
-            onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-            required
+            value={user.email}
+            disabled
+            className="bg-muted text-muted-foreground"
           />
+          <p className="text-xs text-muted-foreground">
+            L'email ne peut pas être modifié
+          </p>
         </div>
 
         <Button type="submit" disabled={isUpdatingProfile}>
@@ -172,6 +186,18 @@ export default function AccountForm({ user }: AccountFormProps) {
         <h3 className="text-lg font-medium">Changer le mot de passe</h3>
 
         <div className="space-y-2">
+          <Label htmlFor="currentPassword">Mot de passe actuel *</Label>
+          <Input
+            id="currentPassword"
+            type="password"
+            value={passwordData.currentPassword}
+            onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+            required
+            disabled={isUpdatingPassword}
+          />
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="newPassword">Nouveau mot de passe *</Label>
           <Input
             id="newPassword"
@@ -180,6 +206,7 @@ export default function AccountForm({ user }: AccountFormProps) {
             onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
             required
             minLength={6}
+            disabled={isUpdatingPassword}
           />
           <p className="text-xs text-muted-foreground">
             Minimum 6 caractères
@@ -195,12 +222,19 @@ export default function AccountForm({ user }: AccountFormProps) {
             onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
             required
             minLength={6}
+            disabled={isUpdatingPassword}
           />
         </div>
 
         <Button type="submit" disabled={isUpdatingPassword}>
           {isUpdatingPassword ? "Mise à jour..." : "Changer le mot de passe"}
         </Button>
+
+        {isUpdatingPassword && (
+          <p className="text-xs text-muted-foreground">
+            Vous serez automatiquement déconnecté après le changement
+          </p>
+        )}
       </form>
     </div>
   )

@@ -12,25 +12,15 @@ export async function updateProfile(
   data: {
     first_name: string
     last_name: string
-    email: string
     avatar_url?: string
   }
 ) {
   const supabase = await createSupabaseServerClient()
 
-  // Mettre à jour l'email dans auth si différent
+  // Vérifier que l'utilisateur est connecté
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     throw new Error("Utilisateur non connecté")
-  }
-
-  if (user.email !== data.email) {
-    const { error: emailError } = await supabase.auth.updateUser({
-      email: data.email
-    })
-    if (emailError) {
-      throw new Error("Erreur lors de la mise à jour de l'email: " + emailError.message)
-    }
   }
 
   // Mettre à jour le profil dans judges
@@ -123,18 +113,31 @@ export async function updatePassword(currentPassword: string, newPassword: strin
 
   // Vérifier que l'utilisateur est connecté
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    throw new Error("Utilisateur non connecté")
+  if (!user || !user.email) {
+    return { success: false, error: "Utilisateur non connecté" }
   }
 
-  // Mettre à jour le mot de passe (Supabase gère la vérification de l'ancien mot de passe)
+  // Vérifier le mot de passe actuel en tentant une ré-authentification
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword
+  })
+
+  if (signInError) {
+    return { success: false, error: "Mot de passe actuel incorrect" }
+  }
+
+  // Mettre à jour le mot de passe
   const { error: updateError } = await supabase.auth.updateUser({
     password: newPassword
   })
 
   if (updateError) {
-    throw new Error("Erreur lors de la mise à jour du mot de passe: " + updateError.message)
+    return { success: false, error: "Erreur lors de la mise à jour du mot de passe: " + updateError.message }
   }
+
+  // Déconnecter l'utilisateur
+  await supabase.auth.signOut()
 
   return { success: true }
 }
