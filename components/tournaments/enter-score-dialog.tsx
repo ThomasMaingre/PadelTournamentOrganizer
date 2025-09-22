@@ -99,11 +99,8 @@ export default function EnterScoreDialog({ match, tournamentId }: { match: Match
 
   // Validation des sets de padel
   const validateSets = (cleaned: { t1: number; t2: number }[]) => {
-    console.log("🔍 DEBUG validateSets - Input:", cleaned)
-
     if (cleaned.length === 0) {
-      console.log("❌ Aucun set saisi")
-      return "Aucun set saisi"
+      return null // Pas d'erreur si aucun set saisi
     }
 
     // Compter les sets gagnés par chaque équipe
@@ -112,11 +109,9 @@ export default function EnterScoreDialog({ match, tournamentId }: { match: Match
 
     for (let i = 0; i < cleaned.length; i++) {
       const set = cleaned[i]
-      console.log(`🎾 Analyse set ${i+1}:`, set)
 
       // Validation de chaque set
       if (set.t1 < 0 || set.t2 < 0 || set.t1 > 7 || set.t2 > 7) {
-        console.log("❌ Score hors limites")
         return "Score invalide : max 7 points par set"
       }
 
@@ -125,48 +120,55 @@ export default function EnterScoreDialog({ match, tournamentId }: { match: Match
       const maxScore = Math.max(set.t1, set.t2)
       const minScore = Math.min(set.t1, set.t2)
 
-      console.log(`📊 Set ${i+1} - diff: ${diff}, max: ${maxScore}, min: ${minScore}`)
-
-      // Règles simplifiées :
-      // - Si une équipe a 6+ et l'autre 4 ou moins = OK
-      // - Si une équipe a 7 et l'autre 5 ou 6 = OK
-      // - Sinon il faut 2 points d'écart minimum
-
       if (maxScore >= 6) {
         const validSet = (maxScore === 6 && minScore <= 4) ||
                         (maxScore === 7 && minScore <= 6) ||
                         (diff >= 2)
 
-        console.log(`✅ Set ${i+1} valid check:`, validSet)
-
         if (validSet) {
           if (set.t1 > set.t2) {
             team1Sets++
-            console.log(`🏆 Team1 gagne set ${i+1} - total: ${team1Sets}`)
           } else {
             team2Sets++
-            console.log(`🏆 Team2 gagne set ${i+1} - total: ${team2Sets}`)
           }
         } else {
-          console.log(`❌ Set ${i+1} invalide`)
           return `Set ${set.t1}-${set.t2} invalide`
         }
       } else {
-        console.log(`❌ Set ${i+1} trop faible`)
         return `Set ${set.t1}-${set.t2} invalide : un set doit aller au moins à 6`
       }
     }
 
-    console.log(`🏁 FINAL - Team1: ${team1Sets} sets, Team2: ${team2Sets} sets`)
-
-    // Vérifier qu'il y a un gagnant (2 sets gagnés)
-    if (team1Sets < 2 && team2Sets < 2) {
-      console.log("❌ Pas de gagnant déterminé")
-      return "Il faut qu'une équipe gagne au moins 2 sets"
+    // Vérifier qu'il y a un gagnant (2 sets gagnés) seulement si on a des sets
+    if (cleaned.length > 0 && team1Sets < 2 && team2Sets < 2) {
+      return null // Pas d'erreur, on peut être en cours de saisie
     }
 
-    console.log("✅ Validation OK!")
     return null // Pas d'erreur
+  }
+
+  // Fonction pour déterminer le gagnant d'un set
+  const getSetWinner = (set: { t1: number; t2: number }) => {
+    if (!Number.isFinite(set.t1) || !Number.isFinite(set.t2) || (set.t1 === 0 && set.t2 === 0)) {
+      return null // Set non joué ou invalide
+    }
+
+    const diff = Math.abs(set.t1 - set.t2)
+    const maxScore = Math.max(set.t1, set.t2)
+    const minScore = Math.min(set.t1, set.t2)
+
+    // Vérifier si le set est valide
+    if (maxScore >= 6) {
+      const validSet = (maxScore === 6 && minScore <= 4) ||
+                      (maxScore === 7 && minScore <= 6) ||
+                      (diff >= 2)
+
+      if (validSet) {
+        return set.t1 > set.t2 ? 'team1' : 'team2'
+      }
+    }
+
+    return null // Set invalide
   }
 
   const handleSetChange = (setIndex: number, team: 't1' | 't2', value: string) => {
@@ -175,7 +177,61 @@ export default function EnterScoreDialog({ match, tournamentId }: { match: Match
 
     const next = [...sets]
     next[setIndex] = { ...next[setIndex], [team]: numericValue }
+
+    // Si après cette modification une équipe a gagné 2 sets, effacer le 3ème set
+    const updatedSets = next.map(s => ({ t1: Number(s.t1), t2: Number(s.t2) }))
+    let team1Sets = 0
+    let team2Sets = 0
+
+    for (let i = 0; i < 2; i++) { // Vérifier seulement les 2 premiers sets
+      const set = updatedSets[i]
+      const winner = getSetWinner(set)
+      if (winner === 'team1') team1Sets++
+      else if (winner === 'team2') team2Sets++
+    }
+
+    // Si une équipe a gagné 2 sets, effacer le 3ème set
+    if (team1Sets === 2 || team2Sets === 2) {
+      next[2] = { t1: "", t2: "" }
+    }
+
     setSets(next)
+  }
+
+  // Calculer les sets gagnés par chaque équipe
+  const getWonSets = () => {
+    const numericSets = sets.map(s => ({ t1: Number(s.t1), t2: Number(s.t2) }))
+    let team1Sets = 0
+    let team2Sets = 0
+
+    for (const set of numericSets) {
+      const winner = getSetWinner(set)
+      if (winner === 'team1') team1Sets++
+      else if (winner === 'team2') team2Sets++
+    }
+
+    return { team1Sets, team2Sets }
+  }
+
+  // Déterminer si on doit afficher le 3ème set
+  const shouldShowThirdSet = () => {
+    const { team1Sets, team2Sets } = getWonSets()
+    // Afficher le 3ème set seulement si aucune équipe n'a encore gagné 2 sets
+    return team1Sets < 2 && team2Sets < 2
+  }
+
+  // Vérifier si un set est complètement rempli
+  const isSetComplete = (setIndex: number) => {
+    const set = sets[setIndex]
+    return set.t1.trim() !== "" && set.t2.trim() !== ""
+  }
+
+  // Vérifier si un set peut être modifié
+  const canEditSet = (setIndex: number) => {
+    if (setIndex === 0) return true // Le premier set peut toujours être modifié
+    if (setIndex === 1) return isSetComplete(0) // Le 2ème set nécessite que le 1er soit complet
+    if (setIndex === 2) return isSetComplete(0) && isSetComplete(1) // Le 3ème set nécessite que les 2 premiers soient complets
+    return false
   }
 
   // Validation en temps réel pour l'affichage
@@ -206,27 +262,34 @@ export default function EnterScoreDialog({ match, tournamentId }: { match: Match
             <Label className="text-center font-medium">{t1Label}</Label>
             <Label className="text-center font-medium">{t2Label}</Label>
 
-            {[0, 1, 2].map((idx) => (
-              <div key={idx} className="contents">
-                <Label className="self-center">Set {idx + 1}</Label>
-                <Input
-                  inputMode="numeric"
-                  placeholder="0–7"
-                  value={sets[idx].t1}
-                  onChange={e => handleSetChange(idx, 't1', e.target.value)}
-                  disabled={disableInputs}
-                  className="text-center"
-                />
-                <Input
-                  inputMode="numeric"
-                  placeholder="0–7"
-                  value={sets[idx].t2}
-                  onChange={e => handleSetChange(idx, 't2', e.target.value)}
-                  disabled={disableInputs}
-                  className="text-center"
-                />
-              </div>
-            ))}
+            {[0, 1, 2].map((idx) => {
+              // Ne pas afficher le 3ème set si une équipe a déjà gagné 2 sets
+              if (idx === 2 && !shouldShowThirdSet()) {
+                return null
+              }
+
+              return (
+                <div key={idx} className="contents">
+                  <Label className="self-center">Set {idx + 1}</Label>
+                  <Input
+                    inputMode="numeric"
+                    placeholder="0–7"
+                    value={sets[idx].t1}
+                    onChange={e => handleSetChange(idx, 't1', e.target.value)}
+                    disabled={disableInputs || !canEditSet(idx)}
+                    className="text-center"
+                  />
+                  <Input
+                    inputMode="numeric"
+                    placeholder="0–7"
+                    value={sets[idx].t2}
+                    onChange={e => handleSetChange(idx, 't2', e.target.value)}
+                    disabled={disableInputs || !canEditSet(idx)}
+                    className="text-center"
+                  />
+                </div>
+              )
+            })}
           </div>
 
           <div className="space-y-2">
