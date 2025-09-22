@@ -55,8 +55,8 @@ export default async function Home() {
 
   // Landing publique (identique à ton code)
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-secondary">
-      <div className="container mx-auto px-4 py-16">
+    <div className="min-h-screen bg-gradient-to-br from-background to-secondary flex flex-col">
+      <div className="container mx-auto px-4 py-16 flex-1">
         {/* Hero Section */}
         <div className="text-center mb-16">
           <div className="flex justify-center mb-6">
@@ -142,6 +142,20 @@ export default async function Home() {
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="border-t bg-card/50 backdrop-blur-sm">
+        <div className="container mx-auto px-4 py-6">
+          <div className="text-center">
+            <Link
+              href="/rgpd"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Protection des données personnelles (RGPD)
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
