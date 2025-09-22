@@ -139,26 +139,28 @@ export default function AddTeamForm({ tournamentId, onTeamAdded, maxTeams, curre
                 <div className="flex items-center gap-2 mb-3">
                   <Badge variant="outline">Joueur {index + 1}</Badge>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor={`firstName-${index}`}>Prénom</Label>
-                    <Input
-                      id={`firstName-${index}`}
-                      value={player.firstName}
-                      onChange={(e) => updatePlayer(index, "firstName", e.target.value)}
-                      placeholder="Prénom"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`lastName-${index}`}>Nom</Label>
-                    <Input
-                      id={`lastName-${index}`}
-                      value={player.lastName}
-                      onChange={(e) => updatePlayer(index, "lastName", e.target.value)}
-                      placeholder="Nom"
-                      required
-                    />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor={`firstName-${index}`}>Prénom</Label>
+                      <Input
+                        id={`firstName-${index}`}
+                        value={player.firstName}
+                        onChange={(e) => updatePlayer(index, "firstName", e.target.value)}
+                        placeholder="Prénom"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`lastName-${index}`}>Nom</Label>
+                      <Input
+                        id={`lastName-${index}`}
+                        value={player.lastName}
+                        onChange={(e) => updatePlayer(index, "lastName", e.target.value)}
+                        placeholder="Nom"
+                        required
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor={`ranking-${index}`}>Classement national</Label>
@@ -175,6 +177,7 @@ export default function AddTeamForm({ tournamentId, onTeamAdded, maxTeams, curre
                         )
                       }
                       placeholder="ex: 1, 50, 150..."
+                      className="max-w-xs"
                     />
                   </div>
                 </div>

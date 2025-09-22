@@ -11,7 +11,6 @@ import TournamentTeams from "@/components/tournaments/tournament-teams"
 import KnockoutBracket from "@/components/tournaments/knockout-bracket"
 import FinalRankings from "@/components/tournaments/final-rankings"
 import AddTeamForm from "@/components/tournaments/add-team-form"
-import BulkTeamForm from "@/components/tournaments/bulk-team-form"
 import TournamentActions from "@/components/tournaments/tournament-actions"
 import RemoveAllTeamsButton from "@/components/tournaments/remove-all-teams-button"
 import DeleteTournamentButton from "@/components/tournaments/delete-tournament-button"
@@ -296,12 +295,6 @@ export default async function TournamentPage({
                         tournamentId={id}
                         teamsCount={teams.filter(t => t.name !== 'TBD').length}
                       />
-                      <Button size="sm" asChild>
-                        <Link href="#add-team">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Ajouter une équipe
-                        </Link>
-                      </Button>
                     </div>
                   )}
                 </div>
@@ -358,12 +351,6 @@ export default async function TournamentPage({
                   currentTeamsCount={teams.filter(t => t.name !== 'TBD').length}
                 />
 
-                {/* Création automatique d'équipes */}
-                <BulkTeamForm
-                  tournamentId={id}
-                  maxTeams={Math.floor((tournament.max_players ?? 0) / 2)}
-                  currentTeamsCount={teams.filter(t => t.name !== 'TBD').length}
-                />
               </>
             )}
 
