@@ -226,96 +226,169 @@ async function cleanupSemifinalDuplicates(tournamentId: string) {
   }
 }
 
-async function ensureAllTeamsInQuarterfinals(tournamentId: string) {
-  const supabase = await createSupabaseClient()
+function getNextPowerOfTwo(n: number): number {
+  if (n <= 2) return 2
+  if (n <= 4) return 4
+  if (n <= 8) return 8
+  if (n <= 16) return 16
+  return 32
+}
 
-  // Récupérer toutes les équipes gagnantes du 1er tour
-  const { data: firstRoundMatches } = await supabase
-    .from("matches")
-    .select("winner_team_id")
-    .eq("tournament_id", tournamentId)
-    .eq("match_type", "round_of_16")
-    .eq("status", "completed")
-    .not("winner_team_id", "is", null)
+async function getOrCreateTBDTeam(tournamentId: string, supabase: any) {
+  const { data: existingTBD } = await supabase
+    .from('teams')
+    .select('id')
+    .eq('tournament_id', tournamentId)
+    .eq('name', 'TBD')
+    .single()
 
-  if (!firstRoundMatches?.length) {
-    console.log(`⚠️ Aucun gagnant du 1er tour trouvé`)
-    return
-  }
+  if (existingTBD) return existingTBD
 
-  const winners = firstRoundMatches.map(m => m.winner_team_id).filter(Boolean)
-  console.log(`🏆 ${winners.length} gagnants du 1er tour`)
+  const { data: newTBD, error } = await supabase
+    .from('teams')
+    .insert({
+      tournament_id: tournamentId,
+      name: 'TBD',
+      pair_weight: 0,
+      seed_position: null
+    })
+    .select()
+    .single()
 
-  // Récupérer tous les quarts de finale
-  const { data: quarterfinals } = await supabase
-    .from("matches")
-    .select("id, team1_id, team2_id")
-    .eq("tournament_id", tournamentId)
-    .eq("match_type", "quarter_final")
-    .order("created_at")
+  if (error) throw error
+  return newTBD
+}
 
-  if (!quarterfinals?.length) {
-    console.log(`⚠️ Aucun quart de finale trouvé`)
-    return
-  }
+async function generateCompleteBracket(
+  tournamentId: string,
+  teams: any[],
+  bracketSize: number,
+  tbdTeamId: string,
+  supabase: any
+) {
+  console.log(`🏗️ Génération bracket complet: ${teams.length} équipes sur ${bracketSize} slots`)
 
-  // Identifier les équipes déjà placées dans les quarts
-  const placedTeams = new Set<string>()
-  quarterfinals.forEach(match => {
-    if (match.team1_id) placedTeams.add(match.team1_id)
-    if (match.team2_id) placedTeams.add(match.team2_id)
-  })
+  // Créer la structure complète du bracket
+  const bracketStructure = createBracketStructure(bracketSize)
 
-  // Trouver les équipes manquantes
-  const missingTeams = winners.filter(teamId => !placedTeams.has(teamId))
-  console.log(`🚨 Équipes manquantes dans les quarts: ${missingTeams.length}`)
+  // Calculer les BYEs
+  const byeCount = bracketSize - teams.length
+  const byeTeams = teams.slice(0, byeCount) // Les meilleures têtes de série ont des BYEs
+  const playingTeams = teams.slice(byeCount) // Les autres jouent le 1er tour
 
-  if (missingTeams.length === 0) return
+  console.log(`🎯 BYEs: ${byeCount} équipes (${byeTeams.map(t => `#${t.seed_position}`).join(', ')})`)
+  console.log(`🎯 1er tour: ${playingTeams.length} équipes`)
 
-  // Récupérer l'équipe TBD
-  const { data: tbdTeams } = await supabase
-    .from("teams")
-    .select("id")
-    .eq("tournament_id", tournamentId)
-    .eq("name", "TBD")
+  const allMatches: any[] = []
 
-  const tbdTeamId = tbdTeams?.[0]?.id
-  if (!tbdTeamId) {
-    console.log(`❌ Équipe TBD non trouvée`)
-    return
-  }
+  // Round 1 : uniquement les équipes qui n'ont pas de BYE
+  if (bracketStructure.rounds.length > 0 && playingTeams.length > 0) {
+    const firstRound = bracketStructure.rounds[0]
+    const firstRoundMatches = Math.floor(playingTeams.length / 2)
 
-  // Placer les équipes manquantes dans les slots TBD disponibles
-  for (const missingTeamId of missingTeams) {
-    const freeSlot = quarterfinals.find(match =>
-      match.team1_id === tbdTeamId || match.team2_id === tbdTeamId
-    )
+    console.log(`🎯 Création ${firstRoundMatches} matches de ${firstRound.type}`)
 
-    if (freeSlot) {
-      const updateField = freeSlot.team1_id === tbdTeamId ? 'team1_id' : 'team2_id'
-      console.log(`🔧 Placement équipe manquante ${missingTeamId.slice(0,8)} dans ${freeSlot.id.slice(0,8)}`)
+    // Seeding standard : 1er vs dernier, 2ème vs avant-dernier, etc.
+    for (let i = 0; i < firstRoundMatches; i++) {
+      const team1 = playingTeams[i]
+      const team2 = playingTeams[playingTeams.length - 1 - i]
 
-      await supabase
-        .from("matches")
-        .update({ [updateField]: missingTeamId })
-        .eq("id", freeSlot.id)
-
-      // Mettre à jour le quarterfinal pour éviter de réutiliser le même slot
-      if (updateField === 'team1_id') {
-        freeSlot.team1_id = missingTeamId
-      } else {
-        freeSlot.team2_id = missingTeamId
-      }
+      allMatches.push({
+        tournament_id: tournamentId,
+        match_type: firstRound.type,
+        round_number: 1,
+        status: "scheduled",
+        team1_id: team1.id,
+        team2_id: team2.id,
+        player1_id: null,
+        player2_id: null,
+        winner_team_id: null,
+        winner_id: null,
+      })
     }
   }
 
-  console.log(`✅ ${missingTeams.length} équipes manquantes placées dans les quarts`)
+  // Round suivant (quarts) : placer les équipes BYE + slots TBD pour les gagnants
+  if (bracketStructure.rounds.length > 1) {
+    const secondRound = bracketStructure.rounds[1]
+
+    console.log(`🎯 Création ${secondRound.matchCount} matches de ${secondRound.type}`)
+
+    for (let i = 0; i < secondRound.matchCount; i++) {
+      const byeTeam = byeTeams[i] || null
+
+      allMatches.push({
+        tournament_id: tournamentId,
+        match_type: secondRound.type,
+        round_number: 1,
+        status: "scheduled",
+        team1_id: byeTeam?.id || tbdTeamId,
+        team2_id: tbdTeamId, // Slot pour le gagnant du 1er tour
+        player1_id: null,
+        player2_id: null,
+        winner_team_id: null,
+        winner_id: null,
+      })
+    }
+  }
+
+  // Rounds suivants (demis, finale) : tous TBD
+  for (let roundIndex = 2; roundIndex < bracketStructure.rounds.length; roundIndex++) {
+    const round = bracketStructure.rounds[roundIndex]
+    console.log(`🎯 Création ${round.matchCount} matches de ${round.type} (TBD)`)
+
+    for (let i = 0; i < round.matchCount; i++) {
+      allMatches.push({
+        tournament_id: tournamentId,
+        match_type: round.type,
+        round_number: 1,
+        status: "scheduled",
+        team1_id: tbdTeamId,
+        team2_id: tbdTeamId,
+        player1_id: null,
+        player2_id: null,
+        winner_team_id: null,
+        winner_id: null,
+      })
+    }
+  }
+
+  // Insérer tous les matches
+  if (allMatches.length > 0) {
+    const { error } = await supabase.from("matches").insert(allMatches)
+    if (error) throw error
+  }
+
+  console.log(`✅ ${allMatches.length} matches créés dans le bracket`)
 }
+
+function createBracketStructure(size: number) {
+  const rounds: Array<{type: string, matchCount: number}> = []
+
+  if (size >= 16) {
+    rounds.push({ type: "round_of_16", matchCount: 8 })
+    rounds.push({ type: "quarter_final", matchCount: 4 })
+    rounds.push({ type: "semi_final", matchCount: 2 })
+    rounds.push({ type: "final", matchCount: 1 })
+  } else if (size >= 8) {
+    rounds.push({ type: "quarter_final", matchCount: 4 })
+    rounds.push({ type: "semi_final", matchCount: 2 })
+    rounds.push({ type: "final", matchCount: 1 })
+  } else if (size >= 4) {
+    rounds.push({ type: "semi_final", matchCount: 2 })
+    rounds.push({ type: "final", matchCount: 1 })
+  } else {
+    rounds.push({ type: "final", matchCount: 1 })
+  }
+
+  return { rounds }
+}
+
 
 export async function generateKnockoutBracket(tournamentId: string) {
   const supabase = await createSupabaseClient()
 
-  // 1) Équipes triées par seed (puis poids si égalité) - FILTRER TBD
+  // 1) Équipes triées par seed
   const { data: tms, error: tErr } = await supabase
     .from("teams")
     .select("id, seed_position, pair_weight, name")
@@ -329,120 +402,26 @@ export async function generateKnockoutBracket(tournamentId: string) {
   const teams = (tms ?? []).filter(team => team.name !== 'TBD')
   if (teams.length < 2) throw new Error("Au moins 2 équipes requises")
 
-  console.log(`🎯 ${teams.length} vraies équipes (TBD exclu)`)
+  console.log(`🎯 ${teams.length} vraies équipes`)
 
-  // 2) Taille du tableau (puissance de 2)
-  const sizes = [2, 4, 8, 16, 32]
-  const size = sizes.find((s) => s >= teams.length) ?? teams.length
-  const initialType = roundLabel(size)
+  // 2) Déterminer la taille du bracket
+  const bracketSize = getNextPowerOfTwo(teams.length)
+  console.log(`📊 Taille du bracket: ${bracketSize}`)
 
-  // 3) Purge des anciens matches d'élimination
+  // 3) Purge des anciens matches
   await supabase
     .from("matches")
     .delete()
     .eq("tournament_id", tournamentId)
-    .in("match_type", [
-      "round_of_32",
-      "round_of_16",
-      "quarter_final",
-      "semi_final",
-      "final",
-    ])
+    .in("match_type", ["round_of_32", "round_of_16", "quarter_final", "semi_final", "final"])
 
-  // Nettoyage des doublons potentiels dans les demi-finales
-  await cleanupSemifinalDuplicates(tournamentId)
+  // 4) Créer ou récupérer l'équipe TBD
+  const tbdTeam = await getOrCreateTBDTeam(tournamentId, supabase)
 
-  // Placer les équipes manquantes dans les quarts après génération
-  await ensureAllTeamsInQuarterfinals(tournamentId)
+  // 5) Générer TOUT le bracket de façon déterministe
+  await generateCompleteBracket(tournamentId, teams, bracketSize, tbdTeam.id, supabase)
 
-  // 4) Gestion des byes — les meilleures seeds passent le premier tour
-  const byes = size - teams.length
-  const byesTeams = teams.slice(0, byes)
-  const playIn = teams.slice(byes)
-
-  // Créer équipe TBD pour placeholders
-  const { data: existingTBD } = await supabase
-    .from('teams')
-    .select('id')
-    .eq('tournament_id', tournamentId)
-    .eq('name', 'TBD')
-    .single()
-
-  let tbdTeam = existingTBD
-  if (!tbdTeam) {
-    const { data: newTBD, error } = await supabase
-      .from('teams')
-      .insert({
-        tournament_id: tournamentId,
-        name: 'TBD',
-        pair_weight: 0,
-        seed_position: null
-      })
-      .select()
-      .single()
-    if (error) throw error
-    tbdTeam = newTBD
-  }
-
-  // Paires du 1er tour parmi les "playIn" (haut vs bas)
-  const rows: any[] = []
-  let i = 0,
-    j = playIn.length - 1
-  while (i < j) {
-    rows.push({
-      tournament_id: tournamentId,
-      match_type: initialType,
-      round_number: 1,
-      status: "scheduled",
-      team1_id: playIn[i].id,
-      team2_id: playIn[j].id,
-      player1_id: null,
-      player2_id: null,
-      winner_team_id: null,
-      winner_id: null,
-    })
-    i++
-    j--
-  }
-
-  if (rows.length) {
-    const { error: insErr } = await supabase.from("matches").insert(rows)
-    if (insErr) throw new Error(insErr.message)
-  }
-
-  // Créer TOUS les matches du round suivant (quarts)
-  const nextType = nextRoundOf(initialType)
-  if (nextType) {
-    const nextRoundMatches: any[] = []
-    const numNextMatches = size / 4 // Nombre de quarts pour un bracket de taille size
-
-    console.log(`🎯 Création ${numNextMatches} quarts: ${byesTeams.length} BYE + ${numNextMatches - byesTeams.length} slots TBD`)
-
-    // Créer tous les quarts - éviter doublons avec BYE teams
-    for (let k = 0; k < numNextMatches; k++) {
-      const byeTeam = byesTeams[k] || null
-      nextRoundMatches.push({
-        tournament_id: tournamentId,
-        match_type: nextType,
-        round_number: 1,
-        status: "scheduled",
-        team1_id: byeTeam?.id || tbdTeam.id,
-        team2_id: byeTeam ? tbdTeam.id : tbdTeam.id, // Éviter BYE vs BYE
-        player1_id: null,
-        player2_id: null,
-        winner_team_id: null,
-        winner_id: null,
-      })
-    }
-
-    if (nextRoundMatches.length) {
-      const { error: nextInsErr } = await supabase.from("matches").insert(nextRoundMatches)
-      if (nextInsErr) throw new Error(nextInsErr.message)
-    }
-  }
-
-  console.log(`✅ Bracket créé: ${rows.length} matches 1er tour, ${byes} BYE automatiques`)
-
+  console.log(`✅ Bracket complet généré pour ${teams.length} équipes`)
   revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true }
 }
@@ -606,307 +585,41 @@ export async function updateMatchScore(prev: any, formData: FormData) {
 async function checkAndAdvanceTeams(tournamentId: string, matchId: string) {
   const supabase = await createSupabaseClient()
 
-  console.log(`🚀🚀🚀 DÉBUT checkAndAdvanceTeams: tournamentId=${tournamentId}, matchId=${matchId}`)
+  console.log(`🚀 DÉBUT checkAndAdvanceTeams: matchId=${matchId.slice(0,8)}`)
 
   // Protection contre les doubles appels
   const cacheKey = `advancement_${matchId}`
   if (global[cacheKey]) {
-    console.log(`⚠️ PROTECTION: Avancement déjà en cours pour ce match, arrêt`)
+    console.log(`⚠️ PROTECTION: Avancement déjà en cours, arrêt`)
     return
   }
   global[cacheKey] = true
-  console.log(`🔒 CACHE: Protection activée pour match ${matchId.slice(0,8)}`)
 
-  // Nettoyer le cache après 10 secondes
+  // Nettoyer le cache après 5 secondes
   setTimeout(() => {
-    console.log(`🧹 CACHE: Nettoyage protection pour match ${matchId.slice(0,8)}`)
     delete global[cacheKey]
-  }, 10000)
+  }, 5000)
 
-  const { data: m } = await supabase
+  const { data: match } = await supabase
     .from("matches")
-    .select("id, match_type, winner_team_id, created_at, team1_id, team2_id")
+    .select("id, match_type, winner_team_id")
     .eq("id", matchId)
     .single()
 
-  console.log(`📊 Match récupéré:`, {
-    id: m?.id?.slice(0,8),
-    type: m?.match_type,
-    winner: m?.winner_team_id?.slice(0,8),
-    team1: m?.team1_id?.slice(0,8),
-    team2: m?.team2_id?.slice(0,8)
-  })
-
-  if (!m || !m.winner_team_id) {
+  if (!match || !match.winner_team_id) {
     console.log(`❌ Arrêt: pas de match ou pas de winner`)
     return
   }
 
-  const nextType = nextRoundOf(m.match_type)
-  console.log(`🎯 Next round type: ${nextType}`)
+  const nextType = nextRoundOf(match.match_type)
   if (!nextType) {
-    console.log(`❌ Arrêt: pas de next round pour ${m.match_type}`)
+    console.log(`❌ Arrêt: pas de next round pour ${match.match_type}`)
     return
   }
 
-  // PROTECTION GLOBALE: Vérifier si l'équipe gagnante est déjà placée dans le round suivant
-  const { data: alreadyPlaced } = await supabase
-    .from("matches")
-    .select("id, team1_id, team2_id")
-    .eq("tournament_id", tournamentId)
-    .eq("match_type", nextType)
-    .or(`team1_id.eq.${m.winner_team_id},team2_id.eq.${m.winner_team_id}`)
+  console.log(`🎯 Avancement de ${match.match_type} vers ${nextType}`)
 
-  if (alreadyPlaced && alreadyPlaced.length > 0) {
-    console.log(`⚠️ PROTECTION GLOBALE: Équipe ${m.winner_team_id?.slice(0,8)} déjà placée dans ${nextType}, arrêt`)
-    return
-  }
-
-  const { data: sameRound } = await supabase
-    .from("matches")
-    .select("id, winner_team_id, created_at, team1_id, team2_id")
-    .eq("tournament_id", tournamentId)
-    .eq("match_type", m.match_type)
-    .order("created_at", { ascending: true })
-
-  console.log(`📋 Matches du même round (${m.match_type}): ${sameRound?.length}`)
-  sameRound?.forEach((sr, i) => {
-    const hasWinner = sr.winner_team_id ? '✅' : '❌'
-    const isCurrentMatch = sr.id === m.id ? ' ← CURRENT' : ''
-    console.log(`  ${i}. ${sr.id.slice(0,8)} ${hasWinner}${isCurrentMatch}`)
-  })
-
-  if (!sameRound?.length) {
-    console.log(`❌ Arrêt: aucun match dans le même round`)
-    return
-  }
-  const idx = sameRound.findIndex((x) => x.id === m.id)
-  console.log(`📍 Index du match actuel: ${idx}`)
-  if (idx < 0) {
-    console.log(`❌ Arrêt: match pas trouvé dans la liste`)
-    return
-  }
-
-  const mateIdx = idx % 2 === 0 ? idx + 1 : idx - 1
-  const mate = sameRound[mateIdx]
-  console.log(`👥 Mate index: ${mateIdx}, mate exists: ${!!mate}`)
-  if (mate) {
-    console.log(`   Mate ID: ${mate.id.slice(0,8)}, has winner: ${!!mate.winner_team_id}`)
-  }
-
-  // Si c'est un BYE match ou pas de mate, chercher un slot libre existant
-  if (!mate || m.team1_id === m.team2_id) {
-    console.log(`🚀 Avancement immédiat: pas de mate OU BYE match`)
-
-    // Chercher un match du round suivant avec un slot TBD libre
-    const { data: tbdTeams, error: tbdError } = await supabase
-      .from("teams")
-      .select("id")
-      .eq("tournament_id", tournamentId)
-      .eq("name", "TBD")
-
-    console.log(`🔍 TBD query: error=${!!tbdError}, teams found=${tbdTeams?.length}`)
-    const tbdTeamId = tbdTeams?.[0]?.id
-    console.log(`🔍 TBD ID: ${tbdTeamId?.slice(0,8)}`)
-
-    if (tbdTeamId) {
-      const { data: freeSlots, error: slotsError } = await supabase
-        .from("matches")
-        .select("id, team1_id, team2_id")
-        .eq("tournament_id", tournamentId)
-        .eq("match_type", nextType)
-        .or(`team1_id.eq.${tbdTeamId},team2_id.eq.${tbdTeamId}`)
-        .order("id", { ascending: true })
-
-      console.log(`🔍 Free slots query: error=${!!slotsError}, slots found=${freeSlots?.length}`)
-      freeSlots?.forEach((slot, i) => {
-        const team1Info = slot.team1_id === tbdTeamId ? 'TBD' : slot.team1_id?.slice(0,8)
-        const team2Info = slot.team2_id === tbdTeamId ? 'TBD' : slot.team2_id?.slice(0,8)
-        console.log(`  ${i}. ${slot.id.slice(0,8)}: ${team1Info} vs ${team2Info}`)
-      })
-
-      // Vérifier d'abord si l'équipe est déjà placée quelque part dans les quarts
-      const { data: existingPlacement } = await supabase
-        .from("matches")
-        .select("id, team1_id, team2_id")
-        .eq("tournament_id", tournamentId)
-        .eq("match_type", nextType)
-        .or(`team1_id.eq.${m.winner_team_id},team2_id.eq.${m.winner_team_id}`)
-
-      if (existingPlacement && existingPlacement.length > 0) {
-        console.log(`⚠️ NORMAL: Équipe ${m.winner_team_id?.slice(0,8)} déjà placée dans les ${nextType}, arrêt`)
-        console.log(`🔍 DÉTAIL PLACEMENT: Équipe trouvée dans ${existingPlacement.length} match(s):`)
-        existingPlacement.forEach((match, i) => {
-          console.log(`  ${i+1}. Match ${match.id.slice(0,8)}: ${match.team1_id?.slice(0,8)} vs ${match.team2_id?.slice(0,8)}`)
-        })
-        return
-      }
-
-      // Trouver le premier slot vraiment libre (pas déjà occupé par ce gagnant)
-      const freeSlot = freeSlots?.find(slot => {
-        const hasTBD = slot.team1_id === tbdTeamId || slot.team2_id === tbdTeamId
-        const notOccupiedByWinner = slot.team1_id !== m.winner_team_id && slot.team2_id !== m.winner_team_id
-        const hasExactlyOneTBD = (slot.team1_id === tbdTeamId) !== (slot.team2_id === tbdTeamId)
-
-        console.log(`🔍 Slot ${slot.id.slice(0,8)}: hasTBD=${hasTBD}, notOccupied=${notOccupiedByWinner}, exactlyOneTBD=${hasExactlyOneTBD}`)
-
-        return hasTBD && notOccupiedByWinner
-      })
-
-      if (freeSlot) {
-        const updateField = freeSlot.team1_id === tbdTeamId ? 'team1_id' : 'team2_id'
-        console.log(`🎯 Slot libre trouvé: ${freeSlot.id.slice(0,8)} (field: ${updateField})`)
-        console.log(`🎯 Gagnant à placer: ${m.winner_team_id?.slice(0,8)}`)
-
-        console.log(`🔧 AVANT UPDATE: ${updateField} = ${m.winner_team_id?.slice(0,8)} dans match ${freeSlot.id.slice(0,8)}`)
-
-        const { error: updateErr } = await supabase
-          .from("matches")
-          .update({ [updateField]: m.winner_team_id })
-          .eq("id", freeSlot.id)
-
-        if (updateErr) {
-          console.error("❌ Erreur placement slot libre:", updateErr.message)
-        } else {
-          console.log(`✅ ${m.winner_team_id?.slice(0,8)} placé dans slot libre ${freeSlot.id.slice(0,8)}`)
-
-          // Vérifier l'état après update
-          const { data: verif } = await supabase
-            .from("matches")
-            .select("id, team1_id, team2_id")
-            .eq("id", freeSlot.id)
-            .single()
-
-          console.log(`🔍 APRÈS UPDATE: match ${verif?.id?.slice(0,8)} = ${verif?.team1_id?.slice(0,8)} vs ${verif?.team2_id?.slice(0,8)}`)
-        }
-        return
-      } else {
-        console.log(`❌ Aucun slot libre trouvé`)
-      }
-    } else {
-      console.log(`❌ TBD team non trouvé`)
-    }
-
-    // Pour les quarts de finale, on ne doit JAMAIS créer de nouveaux matches
-    if (nextType === "quarter_final") {
-      console.log(`❌ ERREUR BYE: Tentative de création d'un 5ème quart de finale. Équipe probablement déjà placée.`)
-      return
-    }
-
-    // Si aucun slot libre pour autres rounds, créer un nouveau match
-    const { error: insErr } = await supabase.from("matches").insert({
-      tournament_id: tournamentId,
-      match_type: nextType,
-      round_number: 1,
-      status: "scheduled",
-      team1_id: m.winner_team_id,
-      team2_id: tbdTeamId,
-      player1_id: null,
-      player2_id: null,
-    })
-    if (insErr) console.error("Erreur avancement BYE:", insErr.message)
-    return
-  }
-
-  // attendre que les 2 soient terminés
-  if (!mate.winner_team_id) {
-    console.log(`⏳ En attente que le mate finisse - mais dans un bracket impair, avancer seul`)
-
-    // Pour un nombre impair de matches (comme 5), avancer directement
-    const totalMatches = sameRound?.length || 0
-    if (totalMatches % 2 === 1) {
-      console.log(`🚀 Nombre impair de matches (${totalMatches}), avancement direct du gagnant`)
-
-      // PROTECTION: Vérifier d'abord si l'équipe est déjà placée quelque part dans les quarts
-      const { data: existingPlacement } = await supabase
-        .from("matches")
-        .select("id, team1_id, team2_id")
-        .eq("tournament_id", tournamentId)
-        .eq("match_type", nextType)
-        .or(`team1_id.eq.${m.winner_team_id},team2_id.eq.${m.winner_team_id}`)
-
-      if (existingPlacement && existingPlacement.length > 0) {
-        console.log(`⚠️ BRACKET IMPAIR: Équipe ${m.winner_team_id?.slice(0,8)} déjà placée dans les ${nextType}, arrêt`)
-        console.log(`🔍 DÉTAIL PLACEMENT: Équipe trouvée dans ${existingPlacement.length} match(s):`)
-        existingPlacement.forEach((match, i) => {
-          console.log(`  ${i+1}. Match ${match.id.slice(0,8)}: ${match.team1_id?.slice(0,8)} vs ${match.team2_id?.slice(0,8)}`)
-        })
-        return
-      }
-
-      // Chercher slot libre comme pour BYE
-      const { data: tbdTeams } = await supabase
-        .from("teams")
-        .select("id")
-        .eq("tournament_id", tournamentId)
-        .eq("name", "TBD")
-
-      const tbdTeamId = tbdTeams?.[0]?.id
-      if (tbdTeamId) {
-        const { data: freeSlots } = await supabase
-          .from("matches")
-          .select("id, team1_id, team2_id")
-          .eq("tournament_id", tournamentId)
-          .eq("match_type", nextType)
-          .or(`team1_id.eq.${tbdTeamId},team2_id.eq.${tbdTeamId}`)
-          .order("id", { ascending: true })
-
-        console.log(`🔍 BRACKET IMPAIR: Recherche slot libre pour ${m.winner_team_id?.slice(0,8)}`)
-        console.log(`🔍 Slots trouvés: ${freeSlots?.length}`)
-        freeSlots?.forEach((slot, i) => {
-          console.log(`  ${i+1}. ${slot.id.slice(0,8)}: ${slot.team1_id?.slice(0,8)} vs ${slot.team2_id?.slice(0,8)}`)
-        })
-
-        const freeSlot = freeSlots?.find(slot => {
-          // Le slot doit avoir TBD dans au moins une position
-          const hasTBD = slot.team1_id === tbdTeamId || slot.team2_id === tbdTeamId
-          // Le slot ne doit pas déjà contenir le gagnant actuel
-          const doesntHaveWinner = slot.team1_id !== m.winner_team_id && slot.team2_id !== m.winner_team_id
-          // Le slot doit avoir exactement 1 TBD (pas 2 TBD)
-          const hasExactlyOneTBD = (slot.team1_id === tbdTeamId) !== (slot.team2_id === tbdTeamId)
-
-          console.log(`  🔍 Slot ${slot.id.slice(0,8)}: hasTBD=${hasTBD}, doesntHaveWinner=${doesntHaveWinner}, hasExactlyOneTBD=${hasExactlyOneTBD}`)
-
-          return hasTBD && doesntHaveWinner && hasExactlyOneTBD
-        })
-
-        if (freeSlot) {
-          const updateField = freeSlot.team1_id === tbdTeamId ? 'team1_id' : 'team2_id'
-          console.log(`🎯 Placement direct dans slot libre: ${freeSlot.id.slice(0,8)}`)
-
-          console.log(`🔧 AVANT UPDATE BRACKET IMPAIR: ${updateField} = ${m.winner_team_id?.slice(0,8)} dans match ${freeSlot.id.slice(0,8)}`)
-
-          const { error: updateErr2 } = await supabase
-            .from("matches")
-            .update({ [updateField]: m.winner_team_id })
-            .eq("id", freeSlot.id)
-
-          if (updateErr2) {
-            console.error("❌ Erreur placement bracket impair:", updateErr2.message)
-          } else {
-            console.log(`✅ Gagnant placé directement (bracket impair)`)
-
-            // Vérifier l'état après update
-            const { data: verif2 } = await supabase
-              .from("matches")
-              .select("id, team1_id, team2_id")
-              .eq("id", freeSlot.id)
-              .single()
-
-            console.log(`🔍 APRÈS UPDATE BRACKET IMPAIR: match ${verif2?.id?.slice(0,8)} = ${verif2?.team1_id?.slice(0,8)} vs ${verif2?.team2_id?.slice(0,8)}`)
-          }
-          return
-        }
-      }
-    }
-
-    console.log(`⏳ Attente normale du mate`)
-    return
-  }
-
-  console.log(`🎯 Avancement normal: 2 gagnants (${m.winner_team_id?.slice(0,8)} vs ${mate.winner_team_id?.slice(0,8)})`)
-
-  // Vérifier s'il reste des slots libres plutôt que créer un nouveau match
+  // Récupérer l'équipe TBD
   const { data: tbdTeams } = await supabase
     .from("teams")
     .select("id")
@@ -914,178 +627,48 @@ async function checkAndAdvanceTeams(tournamentId: string, matchId: string) {
     .eq("name", "TBD")
 
   const tbdTeamId = tbdTeams?.[0]?.id
-  if (tbdTeamId) {
-    const { data: remainingSlots } = await supabase
-      .from("matches")
-      .select("id, team1_id, team2_id")
-      .eq("tournament_id", tournamentId)
-      .eq("match_type", nextType)
-      .or(`team1_id.eq.${tbdTeamId},team2_id.eq.${tbdTeamId}`)
-      .order("id", { ascending: true })
-
-    console.log(`🔍 Slots libres restants: ${remainingSlots?.length}`)
-
-    if (remainingSlots && remainingSlots.length >= 2) {
-      // Vérifier si les gagnants sont déjà placés avant de les placer
-      const { data: team1Already } = await supabase
-        .from("matches")
-        .select("id")
-        .eq("tournament_id", tournamentId)
-        .eq("match_type", nextType)
-        .or(`team1_id.eq.${m.winner_team_id},team2_id.eq.${m.winner_team_id}`)
-
-      const { data: team2Already } = await supabase
-        .from("matches")
-        .select("id")
-        .eq("tournament_id", tournamentId)
-        .eq("match_type", nextType)
-        .or(`team1_id.eq.${mate.winner_team_id},team2_id.eq.${mate.winner_team_id}`)
-
-      console.log(`🔍 SÉPARÉS: Team1 ${m.winner_team_id?.slice(0,8)} déjà placé: ${(team1Already?.length || 0) > 0}`)
-      console.log(`🔍 SÉPARÉS: Team2 ${mate.winner_team_id?.slice(0,8)} déjà placé: ${(team2Already?.length || 0) > 0}`)
-
-      if ((team1Already?.length || 0) > 0 && (team2Already?.length || 0) > 0) {
-        console.log(`⚠️ SÉPARÉS: Les deux équipes sont déjà placées, arrêt`)
-        return
-      }
-
-      // Placer les 2 gagnants dans les slots libres séparément
-      console.log(`🎯 Placement dans slots libres séparés`)
-
-      const slot1 = remainingSlots[0]
-      const slot2 = remainingSlots[1]
-
-      const updateField1 = slot1.team1_id === tbdTeamId ? 'team1_id' : 'team2_id'
-      const updateField2 = slot2.team1_id === tbdTeamId ? 'team1_id' : 'team2_id'
-
-      // Placer seulement les équipes qui ne sont pas déjà placées
-      if ((team1Already?.length || 0) === 0) {
-        console.log(`🎯 Placement Team1 ${m.winner_team_id?.slice(0,8)} dans ${slot1.id.slice(0,8)}`)
-        await supabase.from("matches").update({ [updateField1]: m.winner_team_id }).eq("id", slot1.id)
-      } else {
-        console.log(`⚠️ Team1 ${m.winner_team_id?.slice(0,8)} déjà placé, skip`)
-      }
-
-      if ((team2Already?.length || 0) === 0) {
-        console.log(`🎯 Placement Team2 ${mate.winner_team_id?.slice(0,8)} dans ${slot2.id.slice(0,8)}`)
-        await supabase.from("matches").update({ [updateField2]: mate.winner_team_id }).eq("id", slot2.id)
-      } else {
-        console.log(`⚠️ Team2 ${mate.winner_team_id?.slice(0,8)} déjà placé, skip`)
-      }
-
-      console.log(`✅ Gagnants placés dans slots séparés (avec protection)`)
-      return
-    } else if (remainingSlots && remainingSlots.length === 1) {
-      // Vérifier si les gagnants sont déjà placés avant de les placer
-      const { data: team1Already } = await supabase
-        .from("matches")
-        .select("id")
-        .eq("tournament_id", tournamentId)
-        .eq("match_type", nextType)
-        .or(`team1_id.eq.${m.winner_team_id},team2_id.eq.${m.winner_team_id}`)
-
-      const { data: team2Already } = await supabase
-        .from("matches")
-        .select("id")
-        .eq("tournament_id", tournamentId)
-        .eq("match_type", nextType)
-        .or(`team1_id.eq.${mate.winner_team_id},team2_id.eq.${mate.winner_team_id}`)
-
-      console.log(`🔍 SLOT UNIQUE: Team1 ${m.winner_team_id?.slice(0,8)} déjà placé: ${(team1Already?.length || 0) > 0}`)
-      console.log(`🔍 SLOT UNIQUE: Team2 ${mate.winner_team_id?.slice(0,8)} déjà placé: ${(team2Already?.length || 0) > 0}`)
-
-      if ((team1Already?.length || 0) > 0 && (team2Already?.length || 0) > 0) {
-        console.log(`⚠️ SLOT UNIQUE: Les deux équipes sont déjà placées, arrêt`)
-        return
-      }
-
-      // Un seul slot libre, créer match avec 1 gagnant vs l'autre
-      console.log(`🎯 Un seul slot libre, création match`)
-
-      const slot = remainingSlots[0]
-      const updateField = slot.team1_id === tbdTeamId ? 'team1_id' : 'team2_id'
-      const otherField = updateField === 'team1_id' ? 'team2_id' : 'team1_id'
-
-      // Ne placer que les équipes qui ne sont pas déjà placées
-      const updates: Record<string, string> = {}
-
-      if ((team1Already?.length || 0) === 0) {
-        updates[updateField] = m.winner_team_id
-        console.log(`🎯 Ajout Team1 ${m.winner_team_id?.slice(0,8)} au slot unique`)
-      } else {
-        console.log(`⚠️ Team1 ${m.winner_team_id?.slice(0,8)} déjà placé, ne pas ajouter au slot unique`)
-      }
-
-      if ((team2Already?.length || 0) === 0) {
-        updates[otherField] = mate.winner_team_id
-        console.log(`🎯 Ajout Team2 ${mate.winner_team_id?.slice(0,8)} au slot unique`)
-      } else {
-        console.log(`⚠️ Team2 ${mate.winner_team_id?.slice(0,8)} déjà placé, ne pas ajouter au slot unique`)
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await supabase.from("matches").update(updates).eq("id", slot.id)
-        console.log(`✅ Match créé dans slot libre avec ${Object.keys(updates).length} équipe(s)`)
-      } else {
-        console.log(`⚠️ Aucune équipe à placer dans le slot unique, toutes déjà placées`)
-      }
-
-      return
-    }
-  }
-
-  // Pour les quarts de finale, on ne doit JAMAIS créer de nouveaux matches
-  // car il doit y en avoir exactement 4
-  if (nextType === "quarter_final") {
-    console.log(`❌ ERREUR: Tentative de création d'un 5ème quart de finale. Les équipes sont probablement déjà placées.`)
-
-    // Vérifier si les équipes sont déjà placées quelque part
-    const { data: team1Placement } = await supabase
-      .from("matches")
-      .select("id")
-      .eq("tournament_id", tournamentId)
-      .eq("match_type", nextType)
-      .or(`team1_id.eq.${m.winner_team_id},team2_id.eq.${m.winner_team_id}`)
-
-    const { data: team2Placement } = await supabase
-      .from("matches")
-      .select("id")
-      .eq("tournament_id", tournamentId)
-      .eq("match_type", nextType)
-      .or(`team1_id.eq.${mate.winner_team_id},team2_id.eq.${mate.winner_team_id}`)
-
-    console.log(`🔍 Équipe 1 (${m.winner_team_id?.slice(0,8)}) déjà placée: ${team1Placement?.length > 0 ? 'OUI' : 'NON'}`)
-    console.log(`🔍 Équipe 2 (${mate.winner_team_id?.slice(0,8)}) déjà placée: ${team2Placement?.length > 0 ? 'OUI' : 'NON'}`)
-
+  if (!tbdTeamId) {
+    console.log(`❌ TBD team non trouvé`)
     return
   }
 
-  // Fallback pour autres rounds : éviter doublon et créer nouveau match seulement si nécessaire
-  const { data: existingNext } = await supabase
+  // Trouver le prochain slot libre dans le round suivant
+  const { data: nextRoundMatches } = await supabase
     .from("matches")
-    .select("id")
+    .select("id, team1_id, team2_id")
     .eq("tournament_id", tournamentId)
     .eq("match_type", nextType)
-    .in("team1_id", [m.winner_team_id, mate.winner_team_id])
-    .in("team2_id", [m.winner_team_id, mate.winner_team_id])
+    .or(`team1_id.eq.${tbdTeamId},team2_id.eq.${tbdTeamId}`)
+    .order("created_at", { ascending: true })
 
-  if (existingNext && existingNext.length) {
-    console.log(`❌ Match existe déjà, arrêt`)
+  if (!nextRoundMatches?.length) {
+    console.log(`❌ Aucun slot libre dans ${nextType}`)
     return
   }
 
-  console.log(`🆕 Création nouveau match (aucun slot libre)`)
-  const { error: insErr } = await supabase.from("matches").insert({
-    tournament_id: tournamentId,
-    match_type: nextType,
-    round_number: 1,
-    status: "scheduled",
-    team1_id: m.winner_team_id,
-    team2_id: mate.winner_team_id,
-    player1_id: null,
-    player2_id: null,
-  })
-  if (insErr) throw new Error(insErr.message)
+  // Trouver le premier slot vraiment libre
+  const freeSlot = nextRoundMatches.find(slot =>
+    slot.team1_id === tbdTeamId || slot.team2_id === tbdTeamId
+  )
+
+  if (!freeSlot) {
+    console.log(`❌ Aucun slot libre trouvé`)
+    return
+  }
+
+  // Placer l'équipe gagnante
+  const updateField = freeSlot.team1_id === tbdTeamId ? 'team1_id' : 'team2_id'
+
+  const { error } = await supabase
+    .from("matches")
+    .update({ [updateField]: match.winner_team_id })
+    .eq("id", freeSlot.id)
+
+  if (error) {
+    console.error("❌ Erreur placement:", error.message)
+  } else {
+    console.log(`✅ Équipe ${match.winner_team_id.slice(0,8)} placée dans ${nextType}`)
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
