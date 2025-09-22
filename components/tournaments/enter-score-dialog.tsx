@@ -178,21 +178,23 @@ export default function EnterScoreDialog({ match, tournamentId }: { match: Match
     const next = [...sets]
     next[setIndex] = { ...next[setIndex], [team]: numericValue }
 
-    // Si après cette modification une équipe a gagné 2 sets, effacer le 3ème set
-    const updatedSets = next.map(s => ({ t1: Number(s.t1), t2: Number(s.t2) }))
-    let team1Sets = 0
-    let team2Sets = 0
+    // Ne vérifier l'effacement du 3ème set que si on modifie les sets 1 ou 2
+    if (setIndex < 2) {
+      const updatedSets = next.map(s => ({ t1: Number(s.t1), t2: Number(s.t2) }))
+      let team1Sets = 0
+      let team2Sets = 0
 
-    for (let i = 0; i < 2; i++) { // Vérifier seulement les 2 premiers sets
-      const set = updatedSets[i]
-      const winner = getSetWinner(set)
-      if (winner === 'team1') team1Sets++
-      else if (winner === 'team2') team2Sets++
-    }
+      for (let i = 0; i < 2; i++) { // Vérifier seulement les 2 premiers sets
+        const set = updatedSets[i]
+        const winner = getSetWinner(set)
+        if (winner === 'team1') team1Sets++
+        else if (winner === 'team2') team2Sets++
+      }
 
-    // Si une équipe a gagné 2 sets, effacer le 3ème set
-    if (team1Sets === 2 || team2Sets === 2) {
-      next[2] = { t1: "", t2: "" }
+      // Si une équipe a gagné 2 sets, effacer le 3ème set
+      if (team1Sets === 2 || team2Sets === 2) {
+        next[2] = { t1: "", t2: "" }
+      }
     }
 
     setSets(next)
@@ -204,7 +206,9 @@ export default function EnterScoreDialog({ match, tournamentId }: { match: Match
     let team1Sets = 0
     let team2Sets = 0
 
-    for (const set of numericSets) {
+    // Ne compter que les 2 premiers sets pour l'affichage du 3ème set
+    for (let i = 0; i < Math.min(2, numericSets.length); i++) {
+      const set = numericSets[i]
       const winner = getSetWinner(set)
       if (winner === 'team1') team1Sets++
       else if (winner === 'team2') team2Sets++
