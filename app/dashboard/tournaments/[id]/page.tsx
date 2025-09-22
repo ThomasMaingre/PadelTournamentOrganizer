@@ -352,19 +352,11 @@ export default async function TournamentPage({
             {/* Ajout équipe */}
             {tournament.status === "draft" && (
               <>
-                <Card id="add-team">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Ajouter une équipe</CardTitle>
-                    <CardDescription>Inscrivez une nouvelle équipe au tournoi</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <AddTeamForm
-                      tournamentId={id}
-                      maxTeams={Math.floor((tournament.max_players ?? 0) / 2)}
-                      currentTeamsCount={teams.filter(t => t.name !== 'TBD').length}
-                    />
-                  </CardContent>
-                </Card>
+                <AddTeamForm
+                  tournamentId={id}
+                  maxTeams={Math.floor((tournament.max_players ?? 0) / 2)}
+                  currentTeamsCount={teams.filter(t => t.name !== 'TBD').length}
+                />
 
                 {/* Création automatique d'équipes */}
                 <BulkTeamForm

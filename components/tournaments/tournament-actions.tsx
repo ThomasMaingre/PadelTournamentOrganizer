@@ -159,9 +159,20 @@ export default function TournamentActions({
       return {
         type: "need_teams",
         title: "Ajoutez des équipes",
-        description: "Commencez par ajouter au moins 2 équipes au tournoi avant de pouvoir continuer.",
+        description: "Commencez par ajouter au moins 4 équipes au tournoi avant de pouvoir continuer.",
         stepNumber: null,
         totalSteps: 3
+      }
+    }
+
+    if (currentTeamsCount < 4) {
+      return {
+        type: "not_enough_teams",
+        title: "Pas assez d'équipes",
+        description: `Votre tournoi contient ${currentTeamsCount} équipe${currentTeamsCount > 1 ? 's' : ''} mais il en faut au minimum 4 pour générer un tableau d'élimination directe.`,
+        stepNumber: null,
+        totalSteps: 3,
+        isError: true
       }
     }
 

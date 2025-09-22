@@ -166,7 +166,10 @@ export async function calculateTeamSeeding(tournamentId: string) {
 
   if (error) throw new Error(error.message)
 
-  for (const [idx, team] of (teams ?? []).entries()) {
+  // Filtrer les équipes TBD du seeding
+  const realTeams = (teams ?? []).filter(team => team.name !== 'TBD')
+
+  for (const [idx, team] of realTeams.entries()) {
     await supabase.from("teams").update({ seed_position: idx + 1 }).eq("id", team.id)
   }
   revalidatePath("/dashboard/tournaments/[id]", "page")
@@ -268,16 +271,89 @@ async function generateCompleteBracket(
 ) {
   console.log(`🏗️ Génération bracket complet: ${teams.length} équipes sur ${bracketSize} slots`)
 
+  // LOGIQUE SPÉCIALE POUR 5 ÉQUIPES
+  if (teams.length === 5) {
+    console.log(`🎯 Génération spéciale pour 5 équipes`)
+
+    const allMatches: any[] = []
+
+    // 1 quart : TS4 vs TS5
+    allMatches.push({
+      tournament_id: tournamentId,
+      match_type: "quarter_final",
+      round_number: 1,
+      status: "scheduled",
+      team1_id: teams[3].id, // TS4
+      team2_id: teams[4].id, // TS5
+      player1_id: null,
+      player2_id: null,
+      winner_team_id: null,
+      winner_id: null,
+    })
+
+    // 2 demis : TS1 vs TS2, TS3 vs gagnant(TS4 vs TS5)
+    allMatches.push({
+      tournament_id: tournamentId,
+      match_type: "semi_final",
+      round_number: 1,
+      status: "scheduled",
+      team1_id: teams[0].id, // TS1
+      team2_id: teams[1].id, // TS2
+      player1_id: null,
+      player2_id: null,
+      winner_team_id: null,
+      winner_id: null,
+    })
+
+    allMatches.push({
+      tournament_id: tournamentId,
+      match_type: "semi_final",
+      round_number: 1,
+      status: "scheduled",
+      team1_id: teams[2].id, // TS3
+      team2_id: tbdTeamId, // Gagnant quart
+      player1_id: null,
+      player2_id: null,
+      winner_team_id: null,
+      winner_id: null,
+    })
+
+    // 1 finale
+    allMatches.push({
+      tournament_id: tournamentId,
+      match_type: "final",
+      round_number: 1,
+      status: "scheduled",
+      team1_id: tbdTeamId,
+      team2_id: tbdTeamId,
+      player1_id: null,
+      player2_id: null,
+      winner_team_id: null,
+      winner_id: null,
+    })
+
+    // Insérer tous les matches
+    if (allMatches.length > 0) {
+      const { error } = await supabase.from("matches").insert(allMatches)
+      if (error) throw error
+    }
+
+    console.log(`✅ ${allMatches.length} matches créés pour 5 équipes`)
+    return
+  }
+
   // Créer la structure complète du bracket
-  const bracketStructure = createBracketStructure(bracketSize)
+  const bracketStructure = createBracketStructure(bracketSize, teams.length)
 
-  // Calculer les BYEs
-  const byeCount = bracketSize - teams.length
-  const byeTeams = teams.slice(0, byeCount) // Les meilleures têtes de série ont des BYEs
-  const playingTeams = teams.slice(byeCount) // Les autres jouent le 1er tour
+  // Calculer la distribution des équipes
+  const teamDistribution = calculateTeamDistribution(teams, bracketSize)
+  const { byeTeams, directQuarterTeams, playingTeams } = teamDistribution
 
-  console.log(`🎯 BYEs: ${byeCount} équipes (${byeTeams.map(t => `#${t.seed_position}`).join(', ')})`)
-  console.log(`🎯 1er tour: ${playingTeams.length} équipes`)
+  console.log(`🎯 Total équipes: ${teams.length}`)
+  console.log(`🎯 Bracket size: ${bracketSize}`)
+  console.log(`🎯 BYEs: ${byeTeams.length} équipes (${byeTeams.map(t => `#${t.seed_position || 'N/A'}`).join(', ')})`)
+  console.log(`🎯 Direct en quart: ${directQuarterTeams.length} équipes (${directQuarterTeams.map(t => `#${t.seed_position || 'N/A'}`).join(', ')})`)
+  console.log(`🎯 1er tour: ${playingTeams.length} équipes (${playingTeams.map(t => `#${t.seed_position || 'N/A'}`).join(', ')})`)
 
   const allMatches: any[] = []
 
@@ -308,39 +384,106 @@ async function generateCompleteBracket(
     }
   }
 
-  // Round suivant (quarts) : placer les équipes BYE + slots TBD pour les gagnants
+  // Round suivant : placer selon le type de round
   if (bracketStructure.rounds.length > 1) {
     const secondRound = bracketStructure.rounds[1]
 
     console.log(`🎯 Création ${secondRound.matchCount} matches de ${secondRound.type}`)
 
-    for (let i = 0; i < secondRound.matchCount; i++) {
-      const byeTeam = byeTeams[i] || null
+    // Logique normale pour tous les rounds
+      let matchIndex = 0
 
-      allMatches.push({
-        tournament_id: tournamentId,
-        match_type: secondRound.type,
-        round_number: 1,
-        status: "scheduled",
-        team1_id: byeTeam?.id || tbdTeamId,
-        team2_id: tbdTeamId, // Slot pour le gagnant du 1er tour
-        player1_id: null,
-        player2_id: null,
-        winner_team_id: null,
-        winner_id: null,
-      })
-    }
+      // Placer les BYEs purs (attendent un gagnant)
+      for (let i = 0; i < byeTeams.length; i++) {
+        const byeTeam = byeTeams[i]
+        console.log(`🎯 Match ${matchIndex + 1}: BYE #${byeTeam.seed_position} vs TBD`)
+
+        allMatches.push({
+          tournament_id: tournamentId,
+          match_type: secondRound.type,
+          round_number: 1,
+          status: "scheduled",
+          team1_id: byeTeam.id,
+          team2_id: tbdTeamId,
+          player1_id: null,
+          player2_id: null,
+          winner_team_id: null,
+          winner_id: null,
+        })
+        matchIndex++
+      }
+
+      // Placer les matches directs
+      for (let i = 0; i < directQuarterTeams.length; i += 2) {
+        if (i + 1 < directQuarterTeams.length) {
+          const team1 = directQuarterTeams[i]
+          const team2 = directQuarterTeams[i + 1]
+          console.log(`🎯 Match ${matchIndex + 1}: Direct #${team1.seed_position} vs #${team2.seed_position}`)
+
+          allMatches.push({
+            tournament_id: tournamentId,
+            match_type: secondRound.type,
+            round_number: 1,
+            status: "scheduled",
+            team1_id: team1.id,
+            team2_id: team2.id,
+            player1_id: null,
+            player2_id: null,
+            winner_team_id: null,
+            winner_id: null,
+          })
+          matchIndex++
+        } else if (matchIndex < secondRound.matchCount) {
+          // Équipe directe impaire attend un gagnant
+          const team = directQuarterTeams[i]
+          console.log(`🎯 Match ${matchIndex + 1}: Direct #${team.seed_position} vs TBD`)
+
+          allMatches.push({
+            tournament_id: tournamentId,
+            match_type: secondRound.type,
+            round_number: 1,
+            status: "scheduled",
+            team1_id: team.id,
+            team2_id: tbdTeamId,
+            player1_id: null,
+            player2_id: null,
+            winner_team_id: null,
+            winner_id: null,
+          })
+          matchIndex++
+        }
+      }
+
+      // Compléter avec TBD
+      while (matchIndex < secondRound.matchCount) {
+        console.log(`🎯 Match ${matchIndex + 1}: TBD vs TBD`)
+        allMatches.push({
+          tournament_id: tournamentId,
+          match_type: secondRound.type,
+          round_number: 1,
+          status: "scheduled",
+          team1_id: tbdTeamId,
+          team2_id: tbdTeamId,
+          player1_id: null,
+          player2_id: null,
+          winner_team_id: null,
+          winner_id: null,
+        })
+        matchIndex++
+      }
   }
 
-  // Rounds suivants (demis, finale) : tous TBD
+  // Rounds suivants (finale) : UNE SEULE finale
   for (let roundIndex = 2; roundIndex < bracketStructure.rounds.length; roundIndex++) {
     const round = bracketStructure.rounds[roundIndex]
     console.log(`🎯 Création ${round.matchCount} matches de ${round.type} (TBD)`)
 
-    for (let i = 0; i < round.matchCount; i++) {
+    // CORRECTION: Pour les petits brackets, ne créer qu'UNE finale
+    if (round.type === "final" && teams.length <= 8) {
+      console.log(`🎯 Création d'UNE SEULE finale pour ${teams.length} équipes`)
       allMatches.push({
         tournament_id: tournamentId,
-        match_type: round.type,
+        match_type: "final",
         round_number: 1,
         status: "scheduled",
         team1_id: tbdTeamId,
@@ -350,6 +493,22 @@ async function generateCompleteBracket(
         winner_team_id: null,
         winner_id: null,
       })
+    } else {
+      // Logique normale pour gros brackets
+      for (let i = 0; i < round.matchCount; i++) {
+        allMatches.push({
+          tournament_id: tournamentId,
+          match_type: round.type,
+          round_number: 1,
+          status: "scheduled",
+          team1_id: tbdTeamId,
+          team2_id: tbdTeamId,
+          player1_id: null,
+          player2_id: null,
+          winner_team_id: null,
+          winner_id: null,
+        })
+      }
     }
   }
 
@@ -362,28 +521,137 @@ async function generateCompleteBracket(
   console.log(`✅ ${allMatches.length} matches créés dans le bracket`)
 }
 
-function createBracketStructure(size: number) {
+function createBracketStructure(size: number, teamCount: number) {
   const rounds: Array<{type: string, matchCount: number}> = []
 
-  if (size >= 16) {
-    rounds.push({ type: "round_of_16", matchCount: 8 })
+  // Logique spéciale selon le nombre d'équipes RÉELLES
+  if (teamCount >= 9) {
+    // 9+ équipes : bracket complet avec quarts
+    if (size >= 16) {
+      rounds.push({ type: "round_of_16", matchCount: 8 })
+      rounds.push({ type: "quarter_final", matchCount: 4 })
+      rounds.push({ type: "semi_final", matchCount: 2 })
+      rounds.push({ type: "final", matchCount: 1 })
+    } else {
+      rounds.push({ type: "quarter_final", matchCount: 4 })
+      rounds.push({ type: "semi_final", matchCount: 2 })
+      rounds.push({ type: "final", matchCount: 1 })
+    }
+  } else if (teamCount === 5) {
+    // 5 équipes : 1 quart + 2 demis + 1 finale
+    rounds.push({ type: "quarter_final", matchCount: 1 })
+    rounds.push({ type: "semi_final", matchCount: 2 })
+    rounds.push({ type: "final", matchCount: 1 })
+  } else if (teamCount === 8) {
+    // 8 équipes : quarts + demis + finale (bracket complet)
     rounds.push({ type: "quarter_final", matchCount: 4 })
     rounds.push({ type: "semi_final", matchCount: 2 })
     rounds.push({ type: "final", matchCount: 1 })
-  } else if (size >= 8) {
-    rounds.push({ type: "quarter_final", matchCount: 4 })
+  } else if (teamCount === 7) {
+    // 7 équipes : 3 quarts + 2 demis + 1 finale
+    rounds.push({ type: "quarter_final", matchCount: 3 })
     rounds.push({ type: "semi_final", matchCount: 2 })
     rounds.push({ type: "final", matchCount: 1 })
-  } else if (size >= 4) {
+  } else if (teamCount === 6) {
+    // 6 équipes : 2 quarts + 2 demis + 1 finale
+    rounds.push({ type: "quarter_final", matchCount: 2 })
+    rounds.push({ type: "semi_final", matchCount: 2 })
+    rounds.push({ type: "final", matchCount: 1 })
+  } else if (teamCount >= 3) {
+    // 3-4 équipes : que des demis
     rounds.push({ type: "semi_final", matchCount: 2 })
     rounds.push({ type: "final", matchCount: 1 })
   } else {
+    // 2 équipes : que la finale
     rounds.push({ type: "final", matchCount: 1 })
   }
 
   return { rounds }
 }
 
+function calculateTeamDistribution(teams: any[], bracketSize: number) {
+  const quartersNeeded = bracketSize / 2 // 8 équipes pour les quarts
+
+  if (teams.length === 11) {
+    // 11 équipes: 3 BYEs + 2 directes + 3 gagnants = 8 ✓
+    const byeTeams = teams.slice(0, 3) // TS1, TS2, TS3
+    const directQuarterTeams = teams.slice(3, 5) // TS4, TS5
+    const playingTeams = teams.slice(5) // TS6-TS11 (6 équipes)
+    return { byeTeams, directQuarterTeams, playingTeams }
+  }
+
+  if (teams.length === 10) {
+    // 10 équipes: 2 BYEs + 4 directes + 2 gagnants = 8 ✓
+    // - 2 BYEs: TS1, TS2
+    // - 4 équipes directes en quart: TS3, TS4, TS5, TS6 (2 matches)
+    // - 4 équipes au 1er tour: TS7-TS10 -> 2 gagnants
+    const byeTeams = teams.slice(0, 2) // TS1, TS2
+    const directQuarterTeams = teams.slice(2, 6) // TS3, TS4, TS5, TS6
+    const playingTeams = teams.slice(6) // TS7-TS10 (4 équipes)
+    return { byeTeams, directQuarterTeams, playingTeams }
+  }
+
+  if (teams.length === 9) {
+    // 9 équipes: 1 BYE + 6 directes + 1 gagnant = 8 ✓
+    const byeTeams = teams.slice(0, 1) // TS1
+    const directQuarterTeams = teams.slice(1, 7) // TS2-TS7
+    const playingTeams = teams.slice(7) // TS8, TS9 (2 équipes)
+    return { byeTeams, directQuarterTeams, playingTeams }
+  }
+
+  // Cas spécial pour 5 équipes
+  if (teams.length === 5) {
+    // 5 équipes → 1 match au 1er tour + 2 demis + 1 finale
+    // - 2 BYEs directs en demi: TS1, TS2 (s'affrontent en demi)
+    // - 1 équipe directe en demi: TS3 (affronte le gagnant du 1er tour)
+    // - 2 équipes au 1er tour: TS4 vs TS5 → 1 gagnant
+    // - Demis: TS1 vs TS2, TS3 vs gagnant(TS4 vs TS5)
+    const byeTeams = teams.slice(0, 2) // TS1, TS2 → s'affrontent en demi
+    const directQuarterTeams = teams.slice(2, 3) // TS3 → directement en demi
+    const playingTeams = teams.slice(3) // TS4, TS5 → 1er tour (2 équipes)
+    return { byeTeams, directQuarterTeams, playingTeams }
+  }
+
+  // Cas spécial pour 6 équipes
+  if (teams.length === 6) {
+    // 6 équipes → 2 matches au 1er tour + 2 BYEs + 2 demis + 1 finale
+    // - 2 BYEs: TS1, TS2 (passent directement en demi)
+    // - 4 équipes au 1er tour: TS3-TS6 (2 matches) → 2 gagnants
+    // - Demis: 4 équipes (TS1, TS2 + 2 gagnants)
+    const byeTeams = teams.slice(0, 2) // TS1, TS2 → BYE directement en demi
+    const directQuarterTeams = []
+    const playingTeams = teams.slice(2) // TS3-TS6 → 1er tour (4 équipes)
+    return { byeTeams, directQuarterTeams, playingTeams }
+  }
+
+  // Cas spécial pour 7 équipes
+  if (teams.length === 7) {
+    // 7 équipes → 3 matches au 1er tour + 1 BYE + 2 demis + 1 finale
+    // - 1 BYE: TS1 (passe directement en demi)
+    // - 6 équipes au 1er tour: TS2-TS7 (3 matches) → 3 gagnants
+    // - Demis: 4 équipes (TS1 + 3 gagnants)
+    const byeTeams = teams.slice(0, 1) // TS1 → BYE directement en demi
+    const directQuarterTeams = [] // Pas d'équipes directes en demi
+    const playingTeams = teams.slice(1) // TS2-TS7 → 1er tour (6 équipes)
+    return { byeTeams, directQuarterTeams, playingTeams }
+  }
+
+  // Cas spécial pour 8 équipes (bracket complet)
+  if (teams.length === 8) {
+    // 8 équipes → toutes au 1er tour (quarts)
+    const byeTeams = []
+    const directQuarterTeams = []
+    const playingTeams = teams.slice(0) // Toutes les équipes
+    return { byeTeams, directQuarterTeams, playingTeams }
+  }
+
+  // Logique normale pour autres nombres (4, 12-16 équipes)
+  const byeCount = bracketSize - teams.length
+  const byeTeams = teams.slice(0, byeCount)
+  const playingTeams = teams.slice(byeCount)
+
+  return { byeTeams, directQuarterTeams: [], playingTeams }
+}
 
 export async function generateKnockoutBracket(tournamentId: string) {
   const supabase = await createSupabaseClient()
@@ -403,6 +671,7 @@ export async function generateKnockoutBracket(tournamentId: string) {
   if (teams.length < 2) throw new Error("Au moins 2 équipes requises")
 
   console.log(`🎯 ${teams.length} vraies équipes`)
+  console.log(`🎯 Équipes triées:`, teams.map(t => `#${t.seed_position || 'N/A'} ${t.name}`).join(', '))
 
   // 2) Déterminer la taille du bracket
   const bracketSize = getNextPowerOfTwo(teams.length)
@@ -776,8 +1045,25 @@ export async function addTeam(
 
 export async function deleteTeam(teamId: string) {
   const supabase = await createSupabaseClient()
+
+  // Récupérer le tournamentId avant suppression
+  const { data: team } = await supabase
+    .from("teams")
+    .select("tournament_id")
+    .eq("id", teamId)
+    .single()
+
   const { error } = await supabase.from("teams").delete().eq("id", teamId)
   if (error) throw new Error(error.message)
+
+  // Invalider toutes les têtes de série du tournoi si on a le tournamentId
+  if (team?.tournament_id) {
+    await supabase
+      .from("teams")
+      .update({ seed_position: null })
+      .eq("tournament_id", team.tournament_id)
+  }
+
   revalidatePath("/dashboard/tournaments/[id]", "page")
 }
 
@@ -798,6 +1084,12 @@ export async function resetTournament(tournamentId: string) {
   // Supprimer tous les matches et classements
   await supabase.from("matches").delete().eq("tournament_id", tournamentId)
   await supabase.from("tournament_rankings").delete().eq("tournament_id", tournamentId)
+
+  // Remettre à zéro les seed positions de toutes les équipes
+  await supabase
+    .from("teams")
+    .update({ seed_position: null })
+    .eq("tournament_id", tournamentId)
 
   // Remettre le tournoi en brouillon
   const { error } = await supabase
@@ -903,6 +1195,8 @@ export async function removeAllTeams(tournamentId: string) {
     throw new Error("Erreur lors de la suppression des équipes: " + teamsError.message)
   }
 
+  // Note: Pas besoin d'invalider les seed positions car toutes les équipes sont supprimées
+
   revalidatePath("/dashboard/tournaments/[id]", "page")
   return { success: true }
 }
@@ -949,6 +1243,12 @@ export async function removeTeam(tournamentId: string, teamId: string) {
   if (teamError) {
     throw new Error("Erreur lors de la suppression de l'équipe: " + teamError.message)
   }
+
+  // Invalider toutes les têtes de série du tournoi (forcer le recalcul)
+  await supabase
+    .from("teams")
+    .update({ seed_position: null })
+    .eq("tournament_id", tournamentId)
 
   // Petit délai pour laisser la DB se synchroniser
   await new Promise(resolve => setTimeout(resolve, 100))
