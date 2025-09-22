@@ -231,7 +231,7 @@ export default async function TournamentPage({
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2">
               {tournament.status !== "completed" ? (
                 <>
                   <Button variant="outline" size="sm" asChild>
@@ -318,6 +318,54 @@ export default async function TournamentPage({
 
           {/* Sidebar */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Actions rapides mobile */}
+            <div className="md:hidden">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center justify-between">
+                    Actions rapides
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tournament.status === "completed"
+                          ? "bg-blue-100 text-blue-800"
+                          : tournament.status === "in_progress"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                    >
+                      {tournament.status === "completed"
+                        ? "Terminé"
+                        : tournament.status === "in_progress"
+                          ? "En cours"
+                          : "Brouillon"}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col gap-3">
+                    {tournament.status !== "completed" ? (
+                      <>
+                        <Button variant="outline" size="sm" asChild className="justify-start">
+                          <Link href={`/dashboard/tournaments/${tournamentSlug}/edit`}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            {tournament.status === "draft" ? "Modifier" : "Modifier les dates"}
+                          </Link>
+                        </Button>
+                        <DeleteTournamentButton
+                          tournamentSlug={tournamentSlug}
+                          tournamentName={formatTournamentTitle(tournament.difficulty, tournament.category || 'mixte', tournament.start_date)}
+                        />
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border bg-muted/50 text-muted-foreground">
+                        <Lock className="h-4 w-4" />
+                        <span className="text-sm">Tournoi terminé</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
             {/* Actions tournoi */}
             <Card>
               <CardHeader>

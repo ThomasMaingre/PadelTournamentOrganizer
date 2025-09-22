@@ -203,7 +203,7 @@ export default async function DashboardPage({
 
         {/* Filtres par catégorie */}
         <section className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
             <h2 className="text-xl font-semibold">
               {view === "history" ? "Tournois terminés" : "Mes tournois (brouillons & en cours)"}
             </h2>

@@ -32,15 +32,15 @@ export default function CategoryFilter({ currentView, currentCategory }: Categor
   ]
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-muted-foreground mr-2">Filtrer par catégorie :</span>
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+      <span className="text-sm text-muted-foreground">Filtrer par catégorie :</span>
       <div className="flex rounded-lg border bg-background p-1">
         {categories.map((cat) => (
           <button
             key={cat.key}
             onClick={() => handleCategoryChange(cat.key)}
             disabled={isPending}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${
+            className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors flex items-center gap-1 sm:gap-2 ${
               currentCategory === cat.key
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50"
