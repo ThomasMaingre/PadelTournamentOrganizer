@@ -242,7 +242,7 @@ export default async function TournamentPage({
                     </Link>
                   </Button>
                   <DeleteTournamentButton
-                    tournamentId={id}
+                    tournamentSlug={tournamentSlug}
                     tournamentName={formatTournamentTitle(tournament.difficulty, tournament.category || 'mixte', tournament.start_date)}
                   />
                 </>

@@ -127,6 +127,25 @@ export function getTournamentSlugWithSuffix(tournament: any, allTournaments: any
 }
 
 /**
+ * Trouve l'ID d'un tournoi à partir de son slug
+ * Utilisé pour convertir un slug en ID pour les actions serveur
+ */
+export async function getTournamentIdFromSlug(slug: string, supabaseClient: any): Promise<string | null> {
+  // Récupérer tous les tournois
+  const { data: tournaments } = await supabaseClient
+    .from('tournaments')
+    .select('*')
+    .order('created_at', { ascending: true })
+
+  if (!tournaments) return null
+
+  // Utiliser findTournamentBySlug pour trouver le bon tournoi
+  const tournament = findTournamentBySlug(tournaments, slug)
+
+  return tournament ? tournament.id.toString() : null
+}
+
+/**
  * @deprecated Ancienne fonction, remplacée par createTournamentSlug
  */
 export function createSlug(name: string): string {

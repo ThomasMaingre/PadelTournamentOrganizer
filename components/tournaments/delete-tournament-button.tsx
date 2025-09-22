@@ -19,12 +19,12 @@ import { deleteTournament } from "@/lib/tournament-actions"
 import { toast } from "sonner"
 
 interface DeleteTournamentButtonProps {
-  tournamentId: string
+  tournamentSlug: string
   tournamentName: string
 }
 
 export default function DeleteTournamentButton({
-  tournamentId,
+  tournamentSlug,
   tournamentName
 }: DeleteTournamentButtonProps) {
   const router = useRouter()
@@ -33,7 +33,7 @@ export default function DeleteTournamentButton({
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
-      const result = await deleteTournament(tournamentId)
+      const result = await deleteTournament(tournamentSlug)
       toast.success(`Tournoi "${result.tournamentName}" supprimé avec succès`)
       router.push("/dashboard")
     } catch (error) {

@@ -1317,13 +1317,21 @@ export async function updateTeam(
 // ──────────────────────────────────────────────────────────────────────────────
 /** TOURNOI: Supprimer un tournoi complet */
 // ──────────────────────────────────────────────────────────────────────────────
-export async function deleteTournament(tournamentId: string) {
+export async function deleteTournament(tournamentSlug: string) {
   const supabase = await createSupabaseServerClient()
 
-  // Vérifier que le tournoi existe
+  // Convertir le slug en ID réel du tournoi
+  const { getTournamentIdFromSlug } = await import("./utils/slug")
+  const tournamentId = await getTournamentIdFromSlug(tournamentSlug, supabase)
+
+  if (!tournamentId) {
+    throw new Error(`Tournoi introuvable avec le slug: ${tournamentSlug}. Vérifiez que le tournoi existe et que le slug est correct.`)
+  }
+
+  // Vérifier que le tournoi existe et récupérer ses infos
   const { data: tournament } = await supabase
     .from("tournaments")
-    .select("name")
+    .select("difficulty, start_date, category")
     .eq("id", tournamentId)
     .single()
 
@@ -1384,5 +1392,6 @@ export async function deleteTournament(tournamentId: string) {
   }
 
   revalidatePath("/dashboard")
-  return { success: true, tournamentName: tournament.name }
+  const tournamentDisplay = `${tournament.difficulty} ${tournament.category} ${new Date(tournament.start_date).toLocaleDateString('fr-FR')}`
+  return { success: true, tournamentName: tournamentDisplay }
 }
