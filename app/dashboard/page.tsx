@@ -2,7 +2,7 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-import { createSlug } from "@/lib/utils/slug"
+import { getTournamentSlugWithSuffix } from "@/lib/utils/slug"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import UserDropdown from "@/components/user-dropdown"
@@ -58,7 +58,7 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function formatTournamentTitle(name: string, category: string, startDate: string | null) {
+function formatTournamentTitle(difficulty: string, category: string, startDate: string | null) {
   const categoryLabels = {
     homme: 'Hommes',
     femme: 'Femmes',
@@ -73,10 +73,10 @@ function formatTournamentTitle(name: string, category: string, startDate: string
       month: "2-digit",
       year: "numeric"
     })
-    return `${name} ${categoryLabel} ${formattedDate}`
+    return `${difficulty} ${categoryLabel} ${formattedDate}`
   }
 
-  return `${name} ${categoryLabel}`
+  return `${difficulty} ${categoryLabel}`
 }
 
 export default async function DashboardPage({
@@ -133,7 +133,7 @@ export default async function DashboardPage({
   const statuses = view === "history" ? [...HISTORY_STATUSES] : [...CURRENT_STATUSES]
   let tournamentsQuery = supabase
     .from("tournaments")
-    .select("id, name, created_at, status, category, start_date")
+    .select("id, difficulty, created_at, status, category, start_date")
     .eq("judge_id", user.id)
     .in("status", statuses as unknown as string[])
     .order("created_at", { ascending: false })
@@ -224,14 +224,14 @@ export default async function DashboardPage({
             )}
 
             {(tournaments ?? []).map((t) => (
-              <Link key={t.id} href={`/dashboard/tournaments/${createSlug(t.name)}`} className="block">
+              <Link key={t.id} href={`/dashboard/tournaments/${getTournamentSlugWithSuffix(t, tournaments || [])}`} className="block">
                 <div className="group rounded-2xl border bg-card hover:bg-white/60 transition shadow-sm hover:shadow-md">
                   <div className="px-4 py-4 flex items-center gap-4">
                     <Logo size={40} className="shrink-0 rounded-xl" />
 
                     <div className="min-w-0">
                       <div className="font-semibold truncate">
-                        {formatTournamentTitle(t.name, t.category || 'mixte', t.start_date)}
+                        {formatTournamentTitle(t.difficulty, t.category || 'mixte', t.start_date)}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         Créé le {new Date(t.created_at).toLocaleDateString("fr-FR")}

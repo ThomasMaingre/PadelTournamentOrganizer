@@ -60,10 +60,19 @@ export default function CreateTournamentForm({ judgeId }: Props) {
           <CardDescription>Configurez les paramètres de base de votre tournoi de padel</CardDescription>
         </CardHeader>
         <div className="p-6 space-y-6">
-          {/* Nom */}
+          {/* Difficulté */}
           <div className="space-y-2">
-            <Label htmlFor={nameId}>Nom du tournoi</Label>
-            <Input id={nameId} name="name" placeholder="Ex: P250" required />
+            <Label htmlFor={nameId}>Difficulté du tournoi</Label>
+            <select id={nameId} name="difficulty" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" required>
+              <option value="">Sélectionner une difficulté</option>
+              <option value="P25">P25</option>
+              <option value="P100">P100</option>
+              <option value="P250">P250</option>
+              <option value="P500">P500</option>
+              <option value="P1000">P1000</option>
+              <option value="P1500">P1500</option>
+              <option value="P2000">P2000</option>
+            </select>
           </div>
 
           {/* Dates */}

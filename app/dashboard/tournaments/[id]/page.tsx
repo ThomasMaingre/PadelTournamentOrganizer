@@ -24,9 +24,9 @@ import {
 } from "@/lib/tournament-actions"
 import { completeTournament } from "@/lib/ranking-actions"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-import { createSlug } from "@/lib/utils/slug"
+import { createTournamentSlug, findTournamentBySlug } from "@/lib/utils/slug"
 
-function formatTournamentTitle(name: string, category: string, startDate: string | null) {
+function formatTournamentTitle(difficulty: string, category: string, startDate: string | null) {
   const categoryLabels = {
     homme: 'Hommes',
     femme: 'Femmes',
@@ -41,10 +41,10 @@ function formatTournamentTitle(name: string, category: string, startDate: string
       month: "2-digit",
       year: "numeric"
     })
-    return `${name} ${categoryLabel} ${formattedDate}`
+    return `${difficulty} ${categoryLabel} ${formattedDate}`
   }
 
-  return `${name} ${categoryLabel}`
+  return `${difficulty} ${categoryLabel}`
 }
 
 export default async function TournamentPage({
@@ -78,8 +78,8 @@ export default async function TournamentPage({
 
   const { data: allTournaments, error: tErr } = await allTournamentsQuery
 
-  // Trouver le tournoi qui correspond au slug
-  const tournament = allTournaments?.find(t => createSlug(t.name) === tournamentSlug)
+  // Trouver le tournoi qui correspond au slug (avec gestion des suffixes)
+  const tournament = findTournamentBySlug(allTournaments || [], tournamentSlug)
   if (tErr) {
     console.error("load tournament error:", tErr.message)
     console.error("Tournament Slug:", tournamentSlug)
@@ -219,7 +219,7 @@ export default async function TournamentPage({
                 <Logo size={32} />
                 <div>
                   <h1 className="text-xl font-bold">
-                    {formatTournamentTitle(tournament.name, tournament.category || 'mixte', tournament.start_date)}
+                    {formatTournamentTitle(tournament.difficulty, tournament.category || 'mixte', tournament.start_date)}
                   </h1>
                   <p className="text-sm text-muted-foreground">
                     {teams.filter(t => t.name !== 'TBD').length} équipes inscrites • Max: {Math.floor((tournament.max_players ?? 0) / 2)}
@@ -243,7 +243,7 @@ export default async function TournamentPage({
                   </Button>
                   <DeleteTournamentButton
                     tournamentId={id}
-                    tournamentName={tournament.name}
+                    tournamentName={formatTournamentTitle(tournament.difficulty, tournament.category || 'mixte', tournament.start_date)}
                   />
                 </>
               ) : (
@@ -318,7 +318,7 @@ export default async function TournamentPage({
 
               {/* PODIUM */}
               <TabsContent value="rankings" className="mt-6">
-                <FinalRankings rankings={finalRankings || []} tournamentName={tournament.name} />
+                <FinalRankings rankings={finalRankings || []} tournamentName={formatTournamentTitle(tournament.difficulty, tournament.category || 'mixte', tournament.start_date)} />
               </TabsContent>
             </Tabs>
           </div>

@@ -8,12 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { updateTournament } from "@/lib/tournament-actions"
 import { toast } from "sonner"
-import { createSlug } from "@/lib/utils/slug"
+import { createTournamentSlug } from "@/lib/utils/slug"
 
 type Tournament = {
   id: string
-  name: string
-  description: string | null
+  difficulty: string
   max_players: number | null
   status: string
   start_date: string | null
@@ -30,7 +29,7 @@ export default function EditTournamentForm({ tournament }: EditTournamentFormPro
   const [isSubmitting, setIsSubmitting] = useState(false)
   const isDraft = tournament.status === "draft"
   const [formData, setFormData] = useState({
-    name: tournament.name,
+    difficulty: tournament.difficulty,
     max_players: tournament.max_players || 16,
     start_date: tournament.start_date || "",
     end_date: tournament.end_date || "",
@@ -40,8 +39,8 @@ export default function EditTournamentForm({ tournament }: EditTournamentFormPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (isDraft && !formData.name.trim()) {
-      toast.error("Le nom du tournoi est requis")
+    if (isDraft && !formData.difficulty.trim()) {
+      toast.error("La difficulté du tournoi est requise")
       return
     }
 
@@ -62,7 +61,7 @@ export default function EditTournamentForm({ tournament }: EditTournamentFormPro
     setIsSubmitting(true)
     try {
       await updateTournament(tournament.id, {
-        name: formData.name.trim(),
+        difficulty: formData.difficulty.trim(),
         max_players: formData.max_players,
         start_date: formData.start_date || null,
         end_date: formData.end_date || null,
@@ -70,8 +69,8 @@ export default function EditTournamentForm({ tournament }: EditTournamentFormPro
       })
 
       toast.success("Tournoi modifié avec succès")
-      // Utiliser le nom du tournoi (modifié si c'est le cas) pour créer le slug
-      const tournamentSlug = createSlug(formData.name.trim())
+      // Créer le slug basé sur les nouveaux paramètres
+      const tournamentSlug = createTournamentSlug(formData.difficulty.trim(), formData.start_date, formData.category)
       router.push(`/dashboard/tournaments/${tournamentSlug}`)
     } catch (error) {
       console.error("Erreur lors de la modification:", error)
@@ -82,27 +81,35 @@ export default function EditTournamentForm({ tournament }: EditTournamentFormPro
   }
 
   const handleCancel = () => {
-    const tournamentSlug = createSlug(tournament.name)
+    const tournamentSlug = createTournamentSlug(tournament.difficulty, tournament.start_date!, tournament.category)
     router.push(`/dashboard/tournaments/${tournamentSlug}`)
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Nom du tournoi */}
+      {/* Difficulté du tournoi */}
       <div className="space-y-2">
-        <Label htmlFor="name">Nom du tournoi *</Label>
-        <Input
-          id="name"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="ex: Tournoi de Padel 2024"
+        <Label htmlFor="difficulty">Difficulté du tournoi *</Label>
+        <select
+          id="difficulty"
+          value={formData.difficulty}
+          onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
           required={isDraft}
-          maxLength={100}
           disabled={!isDraft}
-        />
+          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <option value="">Sélectionner une difficulté</option>
+          <option value="P25">P25</option>
+          <option value="P100">P100</option>
+          <option value="P250">P250</option>
+          <option value="P500">P500</option>
+          <option value="P1000">P1000</option>
+          <option value="P1500">P1500</option>
+          <option value="P2000">P2000</option>
+        </select>
         {!isDraft && (
           <p className="text-xs text-muted-foreground">
-            Le nom ne peut plus être modifié une fois le tournoi démarré
+            La difficulté ne peut plus être modifiée après le démarrage du tournoi
           </p>
         )}
       </div>

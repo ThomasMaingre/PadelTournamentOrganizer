@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { calculateFinalRankings } from "./ranking-actions"
-import { createSlug } from "@/lib/utils/slug"
+import { createTournamentSlug, generateUniqueSlug } from "@/lib/utils/slug"
 
 import { cookies } from "next/headers"
 import { createServerClient } from "@supabase/ssr"
@@ -41,11 +41,11 @@ async function getTournamentSlug(tournamentId: string): Promise<string | null> {
     const supabase = await createSupabaseClient()
     const { data: tournament } = await supabase
       .from("tournaments")
-      .select("name")
+      .select("difficulty, start_date, category")
       .eq("id", tournamentId)
       .single()
 
-    return tournament ? createSlug(tournament.name) : null
+    return tournament ? createTournamentSlug(tournament.difficulty, tournament.start_date, tournament.category) : null
   } catch (error) {
     console.error("Error getting tournament slug:", error)
     return null
@@ -58,7 +58,7 @@ async function getTournamentSlug(tournamentId: string): Promise<string | null> {
 export async function createTournament(formData: FormData) {
   const supabase = await createSupabaseServerClient()
 
-  const name = String(formData.get("name") ?? "").trim()
+  const difficulty = String(formData.get("difficulty") ?? "").trim()
   const judgeId = String(formData.get("judgeId") ?? "").trim()
   const startDate = String(formData.get("startDate") ?? "").trim()
   const endDate = formData.get("endDate") ? String(formData.get("endDate")) : null
@@ -67,25 +67,17 @@ export async function createTournament(formData: FormData) {
   const maxTeams = Number(formData.get("maxTeams") ?? 16)
   const max_players = maxTeams * 2
 
-  if (!name || !judgeId || !startDate) {
-    return { error: "Veuillez remplir tous les champs obligatoires (nom, date de début)." }
+  if (!difficulty || !judgeId || !startDate) {
+    return { error: "Veuillez remplir tous les champs obligatoires (difficulté, juge, date de début)." }
   }
 
-  // Vérifier l'unicité du nom (insensible à la casse)
-  const { data: existingTournament } = await supabase
-    .from("tournaments")
-    .select("id")
-    .ilike("name", name)
-    .limit(1)
-
-  if (existingTournament && existingTournament.length > 0) {
-    return { error: "Un tournoi avec ce nom existe déjà. Veuillez choisir un autre nom." }
-  }
+  // Générer le slug unique avec gestion des doublons
+  const tournamentSlug = await generateUniqueSlug(difficulty, startDate, category, undefined, supabase)
 
   const { data, error } = await supabase
     .from("tournaments")
     .insert({
-      name,
+      difficulty,
       judge_id: judgeId,
       start_date: startDate,
       end_date: endDate,
@@ -102,7 +94,7 @@ export async function createTournament(formData: FormData) {
   }
 
   revalidatePath("/dashboard")
-  return { success: true, tournamentId: data.id, tournamentSlug: createSlug(name) }
+  return { success: true, tournamentId: data.id, tournamentSlug }
 }
 
 export async function addPlayer(prevState: any, formData: FormData) {
@@ -1090,7 +1082,7 @@ export async function resetTournament(tournamentId: string) {
 export async function updateTournament(
   tournamentId: string,
   data: {
-    name: string
+    difficulty: string
     max_players: number
     start_date: string | null
     end_date: string | null
@@ -1102,7 +1094,7 @@ export async function updateTournament(
   // Vérifier que le tournoi existe et récupérer ses données actuelles
   const { data: tournament } = await supabase
     .from("tournaments")
-    .select("status, name")
+    .select("status, difficulty, start_date, category")
     .eq("id", tournamentId)
     .single()
 
@@ -1118,21 +1110,7 @@ export async function updateTournament(
 
   // Si le tournoi est en brouillon, on peut tout modifier
   if (tournament.status === "draft") {
-    // Vérifier l'unicité du nom seulement si le nom change
-    if (data.name !== tournament.name) {
-      const { data: existingTournament } = await supabase
-        .from("tournaments")
-        .select("id")
-        .ilike("name", data.name)
-        .neq("id", tournamentId) // Exclure le tournoi actuel
-        .limit(1)
-
-      if (existingTournament && existingTournament.length > 0) {
-        throw new Error("Un tournoi avec ce nom existe déjà. Veuillez choisir un autre nom.")
-      }
-    }
-
-    updateData.name = data.name
+    updateData.difficulty = data.difficulty
     updateData.max_players = data.max_players
     updateData.category = data.category
   }

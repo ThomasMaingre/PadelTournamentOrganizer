@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import EditTournamentForm from "@/components/tournaments/edit-tournament-form"
-import { createSlug } from "@/lib/utils/slug"
+import { createTournamentSlug, findTournamentBySlug } from "@/lib/utils/slug"
 
 export default async function EditTournamentPage({
   params,
@@ -40,8 +40,8 @@ export default async function EditTournamentPage({
 
   const { data: allTournaments, error: tErr } = await allTournamentsQuery
 
-  // Trouver le tournoi qui correspond au slug
-  const tournament = allTournaments?.find(t => createSlug(t.name) === tournamentSlug)
+  // Trouver le tournoi qui correspond au slug (avec gestion des suffixes)
+  const tournament = findTournamentBySlug(allTournaments || [], tournamentSlug)
   if (tErr) {
     console.error("load tournament error:", tErr.message)
     console.error("Tournament Slug:", tournamentSlug)
@@ -78,7 +78,7 @@ export default async function EditTournamentPage({
                 <div>
                   <h1 className="text-xl font-bold">Modifier le tournoi</h1>
                   <p className="text-sm text-muted-foreground">
-                    {tournament.name}
+                    {tournament.difficulty} - {tournament.category} - {tournament.start_date ? new Date(tournament.start_date).toLocaleDateString("fr-FR") : 'Date à définir'}
                   </p>
                 </div>
               </div>
