@@ -50,7 +50,15 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Refresh session if expired - required for Server Components
-  await supabase.auth.getUser()
+  // Ignore refresh token errors as they're normal for expired sessions
+  try {
+    await supabase.auth.getUser()
+  } catch (error: any) {
+    // Silently handle refresh token errors
+    if (error?.code !== 'refresh_token_not_found') {
+      console.error('Unexpected auth error in middleware:', error)
+    }
+  }
 
   // Protected routes - redirect to login if not authenticated
   const isAuthRoute =
@@ -61,13 +69,22 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute = request.nextUrl.pathname === "/"
 
   if (!isAuthRoute && !isPublicRoute) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-    if (!user) {
-      const redirectUrl = new URL("/auth/login", request.url)
-      return NextResponse.redirect(redirectUrl)
+      if (!user) {
+        const redirectUrl = new URL("/auth/login", request.url)
+        return NextResponse.redirect(redirectUrl)
+      }
+    } catch (error: any) {
+      // Handle refresh token errors by redirecting to login
+      if (error?.code === 'refresh_token_not_found') {
+        const redirectUrl = new URL("/auth/login", request.url)
+        return NextResponse.redirect(redirectUrl)
+      }
+      throw error
     }
   }
 

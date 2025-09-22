@@ -19,7 +19,10 @@ export default async function Home() {
   const { data: userData, error: userErr } = await supabase.auth.getUser()
 
   // Pas de panique si "Auth session missing!" : c'est normal quand on n'est pas connecté
-  if (userErr && userErr.message !== "Auth session missing!") {
+  // Aussi ignorer "refresh_token_not_found" qui arrive avec des sessions expirées
+  if (userErr &&
+      userErr.message !== "Auth session missing!" &&
+      userErr.code !== "refresh_token_not_found") {
     console.error("Supabase getUser error (home):", userErr.message)
   }
 
